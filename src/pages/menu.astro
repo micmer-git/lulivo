@@ -363,26 +363,37 @@ document.querySelectorAll<HTMLElement>('.menu-card').forEach(card => {
     tempQty++; const el = expandPanel.querySelector(`.qty-val[data-id="${itemId}"]`) as HTMLElement; if (el) el.textContent = String(tempQty);
   });
 
-  // Confirm add
+  // Confirm add — split qty>1 into individual entries for per-pizza editing
   expandPanel.querySelector('.confirm-add-btn')?.addEventListener('click', () => {
     const noteInput = expandPanel.querySelector('.item-note-input') as HTMLInputElement;
-    const entry: CartEntry = {
-      id: itemId + '_' + Date.now(),
-      baseItemId: itemId,
-      name: itemData?.name || itemId,
-      desc: itemData?.desc || '',
-      price: itemData?.price || 0,
-      qty: tempQty,
-      removed: Array.from(tempRemoved),
-      added: [...tempAdded],
-      note: noteInput?.value?.trim() || '',
-    };
+    const removedArr = Array.from(tempRemoved);
+    const addedArr = [...tempAdded];
+    const noteVal = noteInput?.value?.trim() || '';
+
+    const entries: CartEntry[] = [];
+    for (let i = 0; i < tempQty; i++) {
+      entries.push({
+        id: itemId + '_' + Date.now() + '_' + i,
+        baseItemId: itemId,
+        name: itemData?.name || itemId,
+        desc: itemData?.desc || '',
+        price: itemData?.price || 0,
+        qty: 1,
+        removed: [...removedArr],
+        added: [...addedArr],
+        note: noteVal,
+      });
+    }
+
     if (cart.length === 0 && !orderMode) {
-      pendingEntry = entry; pendingCard = card; pendingExpandPanel = expandPanel;
+      // Store first entry as pending, add rest after mode selection
+      pendingEntry = entries[0];
+      (window as any).__pendingExtras = entries.slice(1);
+      pendingCard = card; pendingExpandPanel = expandPanel;
       showOrderModeModal();
       return;
     }
-    cart.push(entry);
+    entries.forEach(e => cart.push(e));
     expandPanel.classList.remove('open');
     card.classList.remove('expanding');
     card.classList.add('in-cart');
@@ -518,7 +529,7 @@ cartSendBtn.addEventListener('click', () => {
   if (orderMode === 'delivery' && deliveryInfo) {
     header = `*ORDINE — Consegna*\nNome: ${deliveryInfo.name}\nIndirizzo: ${deliveryInfo.address}\nOrario: ${deliveryInfo.time || 'Prima possibile'}\nData: ${ts}`;
   } else {
-    header = `*ORDINE — Asporto*\nNome: ${name}\nData: ${ts}`;
+    header = `*ORDINE — Asporto*\nNome: ${name}\nRitiro: ${selectedPickupTime || 'Prima possibile'}\nData: ${ts}`;
   }
 
   let msg = `${header}\n\n*Articoli:*\n`;
@@ -701,6 +712,9 @@ function closeOrderModeModal() {
 function finalizePendingEntry() {
   if (pendingEntry && pendingCard && pendingExpandPanel) {
     cart.push(pendingEntry);
+    // Also push any extra entries from qty>1 split
+    const extras = (window as any).__pendingExtras as CartEntry[] | undefined;
+    if (extras?.length) { extras.forEach(e => cart.push(e)); (window as any).__pendingExtras = null; }
     pendingExpandPanel.classList.remove('open');
     pendingCard.classList.remove('expanding');
     pendingCard.classList.add('in-cart');
