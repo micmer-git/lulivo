@@ -2,252 +2,671 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { MENU, EXTRAS, DELIVERY } from '../data/menu.js';
 import { SITE } from '../data/site.js';
+const base = import.meta.env.BASE_URL;
+const orderApi = SITE.ORDER_API || null;
 
 const sections = Object.entries(MENU);
+
+// Build JSON for client-side
+const menuDataJSON = JSON.stringify(
+  sections.map(([key, sec]) => ({
+    id: key,
+    title: sec.title,
+    items: sec.items.map(i => ({
+      id: i.id,
+      name: i.name,
+      price: i.price,
+      desc: i.desc || '',
+      ingredients: (i.desc || '').split(/,\s*/).map(x => x.trim()).filter(Boolean),
+    })),
+  }))
+);
 ---
-<BaseLayout title={`Menu — ${SITE.name}`}>
-  <main>
-    <!-- Search -->
-    <div class="search-box">
-      <input type="text" id="searchInput" placeholder="Cerca pizza, ingrediente..." />
+<BaseLayout
+  title={`Menu — ${SITE.name}`}
+  description={`Il menu completo de L'Ulivo: pizze rosse, bianche, calzoni, panuozzi, fritti. Ordina online.`}
+  currentPath={`${base}menu/`}
+>
+  <section class="hero hero-compact">
+    <div class="container">
+      <span class="hero-eyebrow">Menu & Ordina</span>
     </div>
+  </section>
 
-    <!-- Tabs -->
-    <div class="menu-tabs" id="menuTabs">
-      <button class="tab-btn active" data-section="all">Tutto</button>
-      {sections.map(([key, sec]) => (
-        <button class="tab-btn" data-section={key}>{sec.icon} {sec.title}</button>
-      ))}
+  <!-- Tabs -->
+  <div class="menu-tabs-wrapper">
+    <div class="container">
+      <div class="menu-tabs" role="tablist" aria-label="Sezioni del menu">
+        {sections.map(([key, sec], i) => (
+          <button
+            role="tab"
+            class={`menu-tab ${i === 0 ? 'active' : ''}`}
+            aria-selected={i === 0 ? 'true' : 'false'}
+            data-section={key}
+          >
+            {sec.icon} {sec.title}
+          </button>
+        ))}
+      </div>
     </div>
+  </div>
 
-    <!-- Extras banner -->
-    <div class="extras-section">
-      <h3>Extra</h3>
-      <p>🧀 {EXTRAS.cornicioneRicotta.name} — €{EXTRAS.cornicioneRicotta.price.toFixed(2)} ({EXTRAS.cornicioneRicotta.note})</p>
-      <p style="margin-top:.35rem;">🛵 Consegna: Mozzo €{DELIVERY.mozzo.price.toFixed(2)} · Zone limitrofe €{DELIVERY.limitrofi.price.toFixed(2)} · Pizza singola +€{DELIVERY.singola.price.toFixed(2)}</p>
+  <!-- Search -->
+  <div class="menu-search-wrapper">
+    <div class="container menu-container">
+      <div class="menu-search-bar">
+        <svg class="menu-search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input type="search" id="menu-search" class="menu-search-input" placeholder="Cerca pizza, ingrediente..." aria-label="Cerca nel menu" autocomplete="off" />
+        <button type="button" id="menu-search-clear" class="menu-search-clear" aria-label="Cancella" hidden>&times;</button>
+      </div>
+      <div id="menu-search-results" class="menu-search-results" hidden></div>
     </div>
+  </div>
 
-    <!-- Menu sections -->
-    {sections.map(([key, sec]) => (
-      <div class="menu-section" data-menu-section={key}>
-        <h2>{sec.icon} {sec.title}</h2>
-        <div class="menu-grid">
-          {sec.items.map(item => (
-            <div class="menu-item" data-id={item.id} data-name={item.name} data-price={item.price} data-desc={item.desc}>
-              <div class="info">
-                <div class="name">{item.name}</div>
-                <div class="desc">{item.desc}</div>
-              </div>
-              <div class="actions">
-                <span class="price">€{item.price.toFixed(2)}</span>
-                <div class="qty-control">
-                  <button class="qty-btn minus" aria-label="Rimuovi">−</button>
-                  <span class="qty-val">0</span>
-                  <button class="qty-btn plus" aria-label="Aggiungi">+</button>
+  <section class="section menu-section-wrap">
+    <div class="container menu-container">
+
+      <!-- Extras banner -->
+      <div class="extras-banner">
+        <h3>Extra & Consegna</h3>
+        <p>🧀 {EXTRAS.cornicioneRicotta.name} — €{EXTRAS.cornicioneRicotta.price.toFixed(2)} ({EXTRAS.cornicioneRicotta.note})</p>
+        <p>🛵 Mozzo €{DELIVERY.mozzo.price.toFixed(2)} · Zone limitrofe €{DELIVERY.limitrofi.price.toFixed(2)} · Pizza singola +€{DELIVERY.singola.price.toFixed(2)}</p>
+      </div>
+
+      <!-- Menu sections -->
+      {sections.map(([key, sec], si) => (
+        <div
+          class={`menu-panel ${si === 0 ? 'active' : ''}`}
+          data-section={key}
+        >
+          <div class="menu-section">
+            <h2 class="menu-section-title">{sec.icon} {sec.title}</h2>
+            {sec.items.map(item => (
+              <div class="menu-card" data-item-id={item.id} data-item-name={item.name} data-item-price={item.price} data-item-desc={item.desc || ''}>
+                <div class="menu-card-main">
+                  <div class="menu-card-info">
+                    <div class="menu-card-name">{item.name}</div>
+                    {item.desc && <div class="menu-card-desc">{item.desc}</div>}
+                  </div>
+                  <div class="menu-card-right">
+                    <div class="menu-card-price">{item.price.toFixed(2).replace('.',',')} &euro;</div>
+                    <div class="menu-card-btns">
+                      <button class="edit-btn" aria-label={`Personalizza ${item.name}`} data-id={item.id} title="Personalizza">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 11h2M3 8h4M3 5h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M12 4l-1 8H5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      </button>
+                      <button class="add-btn" aria-label={`Aggiungi ${item.name}`} data-id={item.id} title="Aggiungi">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="10" cy="10" r="9" stroke="currentColor" stroke-width="1.5"/><path d="M10 6v8M6 10h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <!-- Expand panel for customization -->
+                <div class="menu-card-expand">
+                  <div class="expand-inner">
+                    <div class="ingredient-chips"></div>
+                    <div class="expand-input-row">
+                      <input type="text" class="add-ingredient-input expand-input" placeholder="+ aggiungi ingrediente..." aria-label={`Aggiungi ingrediente a ${item.name}`} />
+                    </div>
+                    <div class="expand-input-row">
+                      <input type="text" class="item-note-input expand-input expand-input-full" placeholder="Note (es. ben cotta, senza lattosio...)" aria-label={`Note per ${item.name}`} />
+                    </div>
+                    <div class="expand-actions">
+                      <div class="qty-row">
+                        <button class="qty-btn-new qty-dec" data-id={item.id} aria-label="Rimuovi">&#8722;</button>
+                        <span class="qty-val" data-id={item.id}>1</span>
+                        <button class="qty-btn-new qty-inc" data-id={item.id} aria-label="Aggiungi">+</button>
+                      </div>
+                      <button class="confirm-add-btn" data-id={item.id}>Aggiungi al carrello</button>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-      </div>
-    ))}
-  </main>
+      ))}
 
-  <!-- Cart bar -->
-  <div class="cart-bar" id="cartBar">
-    <div>
-      <span class="cart-info" id="cartCount">0 articoli</span>
+      <div class="menu-note">
+        <strong>Nota:</strong> Per allergeni e intolleranze, contattare il personale al {SITE.phone}.
+      </div>
     </div>
-    <span class="cart-total" id="cartTotal">€0.00</span>
-    <button class="btn-order" id="btnOpenOrder">Ordina</button>
-  </div>
+  </section>
 
-  <!-- Order modal -->
-  <div class="modal-overlay" id="orderModal">
-    <div class="modal">
-      <div id="orderFormView">
-        <h2>Il tuo ordine</h2>
-        <div class="order-items" id="orderItems"></div>
-        <div class="order-total" id="orderTotal"></div>
-
-        <div class="form-group">
-          <label for="customerName">Nome</label>
-          <input type="text" id="customerName" required placeholder="Il tuo nome" />
-        </div>
-
-        <div class="form-group">
-          <label for="orderMode">Modalità</label>
-          <select id="orderMode">
-            <option value="asporto">Asporto</option>
-            <option value="delivery">Consegna a domicilio</option>
-          </select>
-        </div>
-
-        <div class="form-group" id="addressGroup" style="display:none;">
-          <label for="deliveryAddress">Indirizzo di consegna</label>
-          <input type="text" id="deliveryAddress" placeholder="Via, civico, città" />
-        </div>
-
-        <div class="form-group">
-          <label for="orderNotes">Note</label>
-          <textarea id="orderNotes" rows="2" placeholder="Allergie, richieste speciali..."></textarea>
-        </div>
-
-        <button class="btn-submit" id="btnSubmit">Conferma Ordine</button>
-        <button class="btn-cancel" id="btnCancel">Annulla</button>
+  <!-- Persistent cart bar -->
+  <div id="cart-bar" class="cart-bar" aria-hidden="true">
+    <div class="cart-bar-inner">
+      <div class="cart-bar-info">
+        <span id="cart-bar-count" class="cart-bar-count">0</span>
+        <span class="cart-bar-label">articoli</span>
+        <span class="cart-bar-dot">&middot;</span>
+        <strong id="cart-bar-total">0,00 &euro;</strong>
       </div>
-
-      <div id="orderSuccessView" style="display:none;">
-        <div class="order-success">
-          <div class="check">✅</div>
-          <h3>Ordine inviato!</h3>
-          <p>Grazie <span id="successName"></span>, il tuo ordine è stato ricevuto.</p>
-          <p style="margin-top:.5rem;color:var(--text-light);">Riceverai conferma al ritiro.</p>
-          <button class="btn-submit" style="margin-top:1.5rem;" id="btnNewOrder">Nuovo ordine</button>
-        </div>
-      </div>
+      <button id="cart-bar-btn" class="cart-bar-btn" aria-label="Apri carrello">
+        Vedi ordine
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
     </div>
   </div>
 
-  <!-- Toast -->
-  <div class="toast" id="toast"></div>
+  <!-- Order mode modal -->
+  <div id="order-mode-overlay" class="order-mode-overlay" aria-hidden="true"></div>
+  <div id="order-mode-modal" class="order-mode-modal" role="dialog" aria-label="Modalita ordine" aria-hidden="true">
+    <h3>Come vuoi ordinare?</h3>
+    <p class="order-mode-sub">Seleziona la modalita per il tuo ordine</p>
+    <div class="order-mode-options">
+      <button id="mode-pickup-btn" class="order-mode-option">
+        <span class="order-mode-icon">🏠</span>
+        <span class="order-mode-title">Asporto</span>
+        <span class="order-mode-desc">Ritiro in negozio</span>
+      </button>
+      <button id="mode-delivery-btn" class="order-mode-option">
+        <span class="order-mode-icon">🛵</span>
+        <span class="order-mode-title">Consegna</span>
+        <span class="order-mode-desc">A domicilio</span>
+      </button>
+    </div>
+    <!-- Pickup form -->
+    <div id="mode-pickup-form" class="order-mode-form" style="display:none">
+      <label class="order-mode-label">Nome</label>
+      <input id="pickup-name" type="text" class="order-mode-input" placeholder="Il tuo nome" />
+      <button id="mode-pickup-confirm" class="order-mode-confirm" disabled>Conferma asporto</button>
+    </div>
+    <!-- Delivery form -->
+    <div id="mode-delivery-form" class="order-mode-form" style="display:none">
+      <label class="order-mode-label">Nome</label>
+      <input id="delivery-name" type="text" class="order-mode-input" placeholder="Il tuo nome" />
+      <label class="order-mode-label">Indirizzo</label>
+      <input id="delivery-address" type="text" class="order-mode-input" placeholder="Via, numero civico, citta" />
+      <label class="order-mode-label">Orario preferito</label>
+      <input id="delivery-time" type="hidden" value="" />
+      <div class="delivery-time-pills" role="listbox">
+        <button type="button" class="delivery-time-pill" data-time="ASAP">Prima possibile</button>
+        <button type="button" class="delivery-time-pill" data-time="19:00">19:00</button>
+        <button type="button" class="delivery-time-pill" data-time="19:30">19:30</button>
+        <button type="button" class="delivery-time-pill" data-time="20:00">20:00</button>
+        <button type="button" class="delivery-time-pill" data-time="20:30">20:30</button>
+        <button type="button" class="delivery-time-pill" data-time="21:00">21:00</button>
+      </div>
+      <button id="mode-delivery-confirm" class="order-mode-confirm" disabled>Conferma consegna</button>
+    </div>
+  </div>
 
-  <script define:vars={{ ORDER_API: SITE.ORDER_API }}>
-    const cart = {};
-    const cartBar = document.getElementById('cartBar');
-    const cartCount = document.getElementById('cartCount');
-    const cartTotal = document.getElementById('cartTotal');
-    const modal = document.getElementById('orderModal');
-    const orderItems = document.getElementById('orderItems');
-    const orderTotal = document.getElementById('orderTotal');
-    const toast = document.getElementById('toast');
+  <!-- Cart drawer -->
+  <div id="cart-overlay" class="cart-overlay" aria-hidden="true"></div>
+  <div id="cart-drawer" class="cart-drawer" role="dialog" aria-label="Carrello" aria-hidden="true">
+    <div class="cart-drawer-header">
+      <h3>Il tuo ordine</h3>
+      <button id="cart-close" class="cart-close" aria-label="Chiudi">&times;</button>
+    </div>
+    <div id="cart-items" class="cart-items">
+      <div class="cart-empty">Nessun articolo nel carrello</div>
+    </div>
+    <div class="cart-footer">
+      <div class="cart-notes-wrap">
+        <label for="order-notes-global" class="cart-notes-label">Note generali:</label>
+        <textarea id="order-notes-global" class="cart-notes-input" rows="2" placeholder="Allergie, richieste particolari..."></textarea>
+      </div>
+      <div class="cart-total">
+        <span>Totale</span>
+        <strong id="cart-total-price">0,00 &euro;</strong>
+      </div>
+      <button id="cart-send-btn" class="btn btn-send cart-send-btn" disabled>
+        Invia ordine
+      </button>
+    </div>
+  </div>
 
-    // Tabs
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        const sec = btn.dataset.section;
-        document.querySelectorAll('.menu-section').forEach(s => {
-          s.style.display = sec === 'all' || s.dataset.menuSection === sec ? '' : 'none';
-        });
-      });
-    });
-
-    // Search
-    document.getElementById('searchInput').addEventListener('input', (e) => {
-      const q = e.target.value.toLowerCase();
-      document.querySelectorAll('.menu-item').forEach(item => {
-        const text = (item.dataset.name + ' ' + item.dataset.desc).toLowerCase();
-        item.style.display = text.includes(q) ? '' : 'none';
-      });
-    });
-
-    // Quantity controls
-    document.querySelectorAll('.menu-item').forEach(item => {
-      const id = item.dataset.id;
-      const name = item.dataset.name;
-      const price = parseFloat(item.dataset.price);
-      const valEl = item.querySelector('.qty-val');
-
-      item.querySelector('.plus').addEventListener('click', (e) => {
-        e.stopPropagation();
-        cart[id] = cart[id] || { name, price, qty: 0 };
-        cart[id].qty++;
-        valEl.textContent = cart[id].qty;
-        updateCart();
-      });
-
-      item.querySelector('.minus').addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (cart[id] && cart[id].qty > 0) {
-          cart[id].qty--;
-          if (cart[id].qty === 0) delete cart[id];
-          valEl.textContent = cart[id]?.qty || 0;
-          updateCart();
-        }
-      });
-    });
-
-    function updateCart() {
-      const items = Object.values(cart);
-      const count = items.reduce((s, i) => s + i.qty, 0);
-      const total = items.reduce((s, i) => s + i.qty * i.price, 0);
-      cartCount.textContent = `${count} articol${count === 1 ? 'o' : 'i'}`;
-      cartTotal.textContent = `€${total.toFixed(2)}`;
-      cartBar.classList.toggle('visible', count > 0);
-    }
-
-    // Order mode toggle
-    document.getElementById('orderMode').addEventListener('change', (e) => {
-      document.getElementById('addressGroup').style.display = e.target.value === 'delivery' ? '' : 'none';
-    });
-
-    // Open order modal
-    document.getElementById('btnOpenOrder').addEventListener('click', () => {
-      const items = Object.values(cart).filter(i => i.qty > 0);
-      const total = items.reduce((s, i) => s + i.qty * i.price, 0);
-      orderItems.innerHTML = items.map(i =>
-        `<div class="order-item"><span>${i.qty}× ${i.name}</span><span>€${(i.qty * i.price).toFixed(2)}</span></div>`
-      ).join('');
-      orderTotal.textContent = `Totale: €${total.toFixed(2)}`;
-      document.getElementById('orderFormView').style.display = '';
-      document.getElementById('orderSuccessView').style.display = 'none';
-      modal.classList.add('open');
-    });
-
-    // Cancel
-    document.getElementById('btnCancel').addEventListener('click', () => modal.classList.remove('open'));
-    modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('open'); });
-
-    // Submit order
-    document.getElementById('btnSubmit').addEventListener('click', async () => {
-      const name = document.getElementById('customerName').value.trim();
-      if (!name) { showToast('Inserisci il tuo nome'); return; }
-
-      const items = Object.values(cart).filter(i => i.qty > 0);
-      const total = items.reduce((s, i) => s + i.qty * i.price, 0);
-      const mode = document.getElementById('orderMode').value;
-
-      const order = {
-        customerName: name,
-        orderMode: mode,
-        deliveryAddress: mode === 'delivery' ? document.getElementById('deliveryAddress').value : '',
-        items: items.map(i => ({ name: i.name, qty: i.qty, price: i.price })),
-        totalPrice: total,
-        notes: document.getElementById('orderNotes').value,
-      };
-
-      try {
-        const res = await fetch(`${ORDER_API}/api/orders`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(order),
-        });
-        if (!res.ok) throw new Error('Errore');
-
-        document.getElementById('successName').textContent = name;
-        document.getElementById('orderFormView').style.display = 'none';
-        document.getElementById('orderSuccessView').style.display = '';
-
-        // Reset cart
-        Object.keys(cart).forEach(k => delete cart[k]);
-        document.querySelectorAll('.qty-val').forEach(v => v.textContent = '0');
-        updateCart();
-      } catch (err) {
-        showToast('Errore nell\'invio. Riprova o chiama il ' + '035 611616');
-      }
-    });
-
-    // New order
-    document.getElementById('btnNewOrder').addEventListener('click', () => {
-      modal.classList.remove('open');
-    });
-
-    function showToast(msg) {
-      toast.textContent = msg;
-      toast.classList.add('show');
-      setTimeout(() => toast.classList.remove('show'), 3000);
-    }
-  </script>
 </BaseLayout>
+
+<script define:vars={{ menuDataJSON, orderApi }}>
+  window.__MENU_DATA = menuDataJSON;
+  window.__ORDER_API = orderApi;
+</script>
+
+<script>
+const ORDER_API: string | null = (window as any).__ORDER_API || null;
+
+interface ItemData { id: string; name: string; price: number; desc: string; ingredients: string[]; }
+const MENU_DATA: Array<{id:string; title:string; items:ItemData[]}> = JSON.parse((window as any).__MENU_DATA || '[]');
+
+const itemLookup = new Map<string, ItemData>();
+MENU_DATA.forEach(s => s.items.forEach(i => itemLookup.set(i.id, i)));
+
+// ---- State ----
+interface CartEntry {
+  id: string; name: string; price: number; qty: number;
+  removed: string[]; added: string[]; note: string;
+}
+
+let cart: CartEntry[] = [];
+let orderMode: 'pickup' | 'delivery' | null = null;
+let customerName: string = '';
+let deliveryInfo: { name: string; address: string; time: string } | null = null;
+
+// ---- Tab switching ----
+const allTabs = document.querySelectorAll<HTMLElement>('.menu-tab');
+const allPanels = document.querySelectorAll<HTMLElement>('.menu-panel');
+
+allTabs.forEach(tab => {
+  tab.addEventListener('click', () => {
+    allTabs.forEach(t => { t.classList.remove('active'); t.setAttribute('aria-selected', 'false'); });
+    tab.classList.add('active');
+    tab.setAttribute('aria-selected', 'true');
+    allPanels.forEach(p => p.classList.toggle('active', p.dataset.section === tab.dataset.section));
+  });
+});
+
+// ---- Menu card expand & cart ----
+document.querySelectorAll<HTMLElement>('.menu-card').forEach(card => {
+  const expandPanel = card.querySelector('.menu-card-expand') as HTMLElement;
+  const addBtn = card.querySelector('.add-btn') as HTMLElement;
+  const itemId = card.dataset.itemId!;
+  const itemData = itemLookup.get(itemId);
+  let tempQty = 1;
+  let tempRemoved: Set<string> = new Set();
+  let tempAdded: string[] = [];
+
+  function renderChips() {
+    const container = expandPanel.querySelector('.ingredient-chips')!;
+    container.innerHTML = '';
+    (itemData?.ingredients || []).forEach(ing => {
+      const chip = document.createElement('span');
+      chip.className = 'ing-chip' + (tempRemoved.has(ing) ? ' removed' : '');
+      chip.innerHTML = `${ing} <span class="chip-x">${tempRemoved.has(ing) ? '+' : '\u00D7'}</span>`;
+      chip.addEventListener('click', () => {
+        if (tempRemoved.has(ing)) tempRemoved.delete(ing); else tempRemoved.add(ing);
+        renderChips();
+      });
+      container.appendChild(chip);
+    });
+    tempAdded.forEach((ing, idx) => {
+      const chip = document.createElement('span');
+      chip.className = 'ing-chip added';
+      chip.innerHTML = `+ ${ing} <span class="chip-x">\u00D7</span>`;
+      chip.addEventListener('click', () => { tempAdded.splice(idx, 1); renderChips(); });
+      container.appendChild(chip);
+    });
+  }
+
+  function closeAllExpands() {
+    document.querySelectorAll('.menu-card-expand.open').forEach(p => p.classList.remove('open'));
+    document.querySelectorAll('.menu-card.expanding').forEach(c => c.classList.remove('expanding'));
+  }
+
+  function openExpand() {
+    closeAllExpands();
+    tempQty = 1; tempRemoved = new Set(); tempAdded = [];
+    expandPanel.classList.add('open');
+    card.classList.add('expanding');
+    renderChips();
+    const qtyEl = expandPanel.querySelector(`.qty-val[data-id="${itemId}"]`) as HTMLElement;
+    if (qtyEl) qtyEl.textContent = '1';
+    const noteInput = expandPanel.querySelector('.item-note-input') as HTMLInputElement;
+    if (noteInput) noteInput.value = '';
+    const addInput = expandPanel.querySelector('.add-ingredient-input') as HTMLInputElement;
+    if (addInput) addInput.value = '';
+    requestAnimationFrame(() => {
+      setTimeout(() => card.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 150);
+    });
+  }
+
+  // Quick add
+  addBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const entry: CartEntry = {
+      id: itemId + '_' + Date.now(),
+      name: itemData?.name || itemId,
+      price: itemData?.price || 0,
+      qty: 1, removed: [], added: [], note: '',
+    };
+    if (cart.length === 0 && !orderMode) {
+      pendingEntry = entry; pendingCard = card; pendingExpandPanel = expandPanel;
+      showOrderModeModal();
+      return;
+    }
+    cart.push(entry);
+    card.classList.add('in-cart');
+    card.animate([{transform:'scale(0.97)'},{transform:'scale(1)'}], {duration:200, easing:'ease-out'});
+    updateCartUI();
+  });
+
+  // Edit button
+  card.querySelector('.edit-btn')?.addEventListener('click', (e) => { e.stopPropagation(); openExpand(); });
+  card.querySelector('.menu-card-info')?.addEventListener('click', () => openExpand());
+
+  // Add ingredient input
+  const addIngInput = expandPanel.querySelector('.add-ingredient-input') as HTMLInputElement;
+  addIngInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && addIngInput.value.trim()) {
+      e.preventDefault();
+      tempAdded.push(addIngInput.value.trim());
+      addIngInput.value = '';
+      renderChips();
+    }
+  });
+
+  // Qty controls
+  expandPanel.querySelector('.qty-dec')?.addEventListener('click', () => {
+    if (tempQty > 1) { tempQty--; const el = expandPanel.querySelector(`.qty-val[data-id="${itemId}"]`) as HTMLElement; if (el) el.textContent = String(tempQty); }
+  });
+  expandPanel.querySelector('.qty-inc')?.addEventListener('click', () => {
+    tempQty++; const el = expandPanel.querySelector(`.qty-val[data-id="${itemId}"]`) as HTMLElement; if (el) el.textContent = String(tempQty);
+  });
+
+  // Confirm add
+  expandPanel.querySelector('.confirm-add-btn')?.addEventListener('click', () => {
+    const noteInput = expandPanel.querySelector('.item-note-input') as HTMLInputElement;
+    const entry: CartEntry = {
+      id: itemId + '_' + Date.now(),
+      name: itemData?.name || itemId,
+      price: itemData?.price || 0,
+      qty: tempQty,
+      removed: Array.from(tempRemoved),
+      added: [...tempAdded],
+      note: noteInput?.value?.trim() || '',
+    };
+    if (cart.length === 0 && !orderMode) {
+      pendingEntry = entry; pendingCard = card; pendingExpandPanel = expandPanel;
+      showOrderModeModal();
+      return;
+    }
+    cart.push(entry);
+    expandPanel.classList.remove('open');
+    card.classList.remove('expanding');
+    card.classList.add('in-cart');
+    card.animate([{transform:'scale(0.97)'},{transform:'scale(1)'}], {duration:200, easing:'ease-out'});
+    updateCartUI();
+  });
+});
+
+// ---- Pending entry ----
+let pendingEntry: CartEntry | null = null;
+let pendingCard: HTMLElement | null = null;
+let pendingExpandPanel: HTMLElement | null = null;
+
+// ---- Cart UI ----
+const cartBar = document.getElementById('cart-bar')!;
+const cartBarCount = document.getElementById('cart-bar-count')!;
+const cartBarTotal = document.getElementById('cart-bar-total')!;
+const cartDrawer = document.getElementById('cart-drawer')!;
+const cartOverlay = document.getElementById('cart-overlay')!;
+const cartItemsEl = document.getElementById('cart-items')!;
+const cartTotalPrice = document.getElementById('cart-total-price')!;
+const cartSendBtn = document.getElementById('cart-send-btn') as HTMLButtonElement;
+
+function formatPrice(n: number): string { return n.toFixed(2).replace('.', ',') + ' \u20AC'; }
+function totalQty(): number { return cart.reduce((s, e) => s + e.qty, 0); }
+function totalPrice(): number { return cart.reduce((s, e) => s + e.price * e.qty, 0); }
+
+function updateCartUI() {
+  const count = totalQty();
+  if (count > 0) {
+    cartBar.classList.add('visible');
+    cartBar.setAttribute('aria-hidden', 'false');
+    cartBarCount.textContent = String(count);
+    cartBarTotal.textContent = formatPrice(totalPrice());
+  } else {
+    cartBar.classList.remove('visible');
+    cartBar.setAttribute('aria-hidden', 'true');
+  }
+
+  if (cart.length === 0) {
+    cartItemsEl.innerHTML = '<div class="cart-empty">Nessun articolo nel carrello</div>';
+  } else {
+    cartItemsEl.innerHTML = cart.map((entry, idx) => {
+      let modsHtml = '';
+      if (entry.removed.length) modsHtml += entry.removed.map(r => `<span class="mod-remove">senza ${r}</span>`).join(', ');
+      if (entry.added.length) modsHtml += (modsHtml ? ', ' : '') + entry.added.map(a => `<span class="mod-add">+ ${a}</span>`).join(', ');
+      return `<div class="cart-item" data-idx="${idx}">
+        <div class="cart-item-info">
+          <div class="cart-item-name">${entry.name}</div>
+          ${modsHtml ? `<div class="cart-item-mods">${modsHtml}</div>` : ''}
+          ${entry.note ? `<div class="cart-item-note">"${entry.note}"</div>` : ''}
+        </div>
+        <div class="cart-item-actions">
+          <div class="cart-item-price">${formatPrice(entry.price * entry.qty)}</div>
+          <div class="cart-item-qty">
+            <button class="cart-remove-btn" data-idx="${idx}" aria-label="Rimuovi">\u{1F5D1}</button>
+            <button data-action="dec" data-idx="${idx}">−</button>
+            <span>${entry.qty}</span>
+            <button data-action="inc" data-idx="${idx}">+</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+
+    cartItemsEl.querySelectorAll('[data-action="dec"]').forEach(btn => {
+      btn.addEventListener('click', () => { const i = parseInt((btn as HTMLElement).dataset.idx!); if (cart[i].qty > 1) cart[i].qty--; else cart.splice(i,1); updateCartUI(); });
+    });
+    cartItemsEl.querySelectorAll('[data-action="inc"]').forEach(btn => {
+      btn.addEventListener('click', () => { cart[parseInt((btn as HTMLElement).dataset.idx!)].qty++; updateCartUI(); });
+    });
+    cartItemsEl.querySelectorAll('.cart-remove-btn').forEach(btn => {
+      btn.addEventListener('click', () => { cart.splice(parseInt((btn as HTMLElement).dataset.idx!),1); updateCartUI(); });
+    });
+  }
+
+  cartTotalPrice.textContent = formatPrice(totalPrice());
+  cartSendBtn.disabled = cart.length === 0 || !orderMode;
+
+  document.querySelectorAll<HTMLElement>('.menu-card').forEach(c => {
+    const id = c.dataset.itemId!;
+    c.classList.toggle('in-cart', cart.some(e => e.id.startsWith(id + '_')));
+  });
+}
+
+// Cart open/close
+function openCart() {
+  cartOverlay.classList.add('open');
+  cartDrawer.classList.add('open');
+  document.body.classList.add('scroll-locked');
+}
+function closeCart() {
+  cartOverlay.classList.remove('open');
+  cartDrawer.classList.remove('open');
+  document.body.classList.remove('scroll-locked');
+}
+
+document.getElementById('cart-bar-btn')?.addEventListener('click', openCart);
+document.getElementById('cart-close')?.addEventListener('click', closeCart);
+cartOverlay.addEventListener('click', closeCart);
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && cartDrawer.classList.contains('open')) closeCart(); });
+
+// ---- Send Order ----
+cartSendBtn.addEventListener('click', async () => {
+  if (cart.length === 0 || !orderMode) return;
+
+  const globalNotes = (document.getElementById('order-notes-global') as HTMLTextAreaElement)?.value?.trim();
+  const name = orderMode === 'delivery' && deliveryInfo ? deliveryInfo.name : customerName;
+
+  const order = {
+    customerName: name || 'Anonimo',
+    orderMode,
+    deliveryAddress: deliveryInfo?.address || '',
+    items: cart.map(e => ({ name: e.name, qty: e.qty, price: e.price, removed: e.removed, added: e.added, note: e.note || '' })),
+    totalPrice: totalPrice(),
+    notes: globalNotes || '',
+  };
+
+  if (ORDER_API) {
+    try {
+      const res = await fetch(`${ORDER_API}/api/orders`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(order),
+      });
+      if (res.ok) {
+        // Success — reset cart
+        cart.length = 0;
+        document.querySelectorAll('.qty-val').forEach(v => (v as HTMLElement).textContent = '0');
+        updateCartUI();
+        closeCart();
+
+        // Show success message
+        const msg = document.createElement('div');
+        msg.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--green-deep);color:white;padding:2rem 3rem;z-index:9999;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.3);border:2px solid var(--accent-gold);font-family:var(--font-display);';
+        msg.innerHTML = `<div style="font-size:3rem;margin-bottom:0.5rem;">✅</div><div style="font-size:1.3rem;font-weight:700;">Ordine inviato!</div><div style="font-size:0.9rem;opacity:0.8;margin-top:0.35rem;">Grazie ${name || ''}. Riceverai conferma.</div>`;
+        document.body.appendChild(msg);
+        setTimeout(() => msg.remove(), 4000);
+        return;
+      }
+    } catch {}
+  }
+
+  // Fallback: phone call
+  alert(`Ordine pronto! Chiama il ${document.querySelector('.site-footer')?.textContent?.match(/035\s*611616/)?.[0] || '035 611616'} per confermare.`);
+});
+
+// ---- Order Mode Modal ----
+const orderModeOverlay = document.getElementById('order-mode-overlay')!;
+const orderModeModal = document.getElementById('order-mode-modal')!;
+const modePickupBtn = document.getElementById('mode-pickup-btn')!;
+const modeDeliveryBtn = document.getElementById('mode-delivery-btn')!;
+const modePickupForm = document.getElementById('mode-pickup-form')!;
+const modeDeliveryForm = document.getElementById('mode-delivery-form')!;
+const pickupNameInput = document.getElementById('pickup-name') as HTMLInputElement;
+const modePickupConfirm = document.getElementById('mode-pickup-confirm') as HTMLButtonElement;
+const deliveryNameInput = document.getElementById('delivery-name') as HTMLInputElement;
+const deliveryAddressInput = document.getElementById('delivery-address') as HTMLInputElement;
+const deliveryTimeInput = document.getElementById('delivery-time') as HTMLInputElement;
+const deliveryTimeButtons = document.querySelectorAll<HTMLButtonElement>('.delivery-time-pill');
+const modeDeliveryConfirm = document.getElementById('mode-delivery-confirm') as HTMLButtonElement;
+let selectedDeliveryTime = '';
+
+function showOrderModeModal() {
+  orderModeOverlay.classList.add('open');
+  orderModeModal.classList.add('open');
+  document.body.classList.add('scroll-locked');
+  modePickupForm.style.display = 'none';
+  modeDeliveryForm.style.display = 'none';
+  modePickupBtn.classList.remove('selected');
+  modeDeliveryBtn.classList.remove('selected');
+  selectedDeliveryTime = '';
+  deliveryTimeInput.value = '';
+  deliveryTimeButtons.forEach(b => b.classList.remove('selected'));
+}
+
+function closeOrderModeModal() {
+  orderModeOverlay.classList.remove('open');
+  orderModeModal.classList.remove('open');
+  document.body.classList.remove('scroll-locked');
+}
+
+function finalizePendingEntry() {
+  if (pendingEntry && pendingCard && pendingExpandPanel) {
+    cart.push(pendingEntry);
+    pendingExpandPanel.classList.remove('open');
+    pendingCard.classList.remove('expanding');
+    pendingCard.classList.add('in-cart');
+    pendingCard.animate([{transform:'scale(0.97)'},{transform:'scale(1)'}], {duration:200, easing:'ease-out'});
+    pendingEntry = null; pendingCard = null; pendingExpandPanel = null;
+    updateCartUI();
+  }
+  closeOrderModeModal();
+}
+
+modePickupBtn.addEventListener('click', () => {
+  modePickupBtn.classList.add('selected');
+  modeDeliveryBtn.classList.remove('selected');
+  modePickupForm.style.display = 'block';
+  modeDeliveryForm.style.display = 'none';
+});
+
+modeDeliveryBtn.addEventListener('click', () => {
+  modeDeliveryBtn.classList.add('selected');
+  modePickupBtn.classList.remove('selected');
+  modeDeliveryForm.style.display = 'block';
+  modePickupForm.style.display = 'none';
+});
+
+pickupNameInput.addEventListener('input', () => { modePickupConfirm.disabled = !pickupNameInput.value.trim(); });
+
+modePickupConfirm.addEventListener('click', () => {
+  if (!pickupNameInput.value.trim()) return;
+  orderMode = 'pickup';
+  customerName = pickupNameInput.value.trim();
+  finalizePendingEntry();
+});
+
+function validateDelivery() {
+  modeDeliveryConfirm.disabled = !deliveryNameInput.value.trim() || !deliveryAddressInput.value.trim();
+}
+deliveryNameInput.addEventListener('input', validateDelivery);
+deliveryAddressInput.addEventListener('input', validateDelivery);
+
+deliveryTimeButtons.forEach(btn => {
+  btn.addEventListener('click', () => {
+    deliveryTimeButtons.forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    selectedDeliveryTime = btn.dataset.time === 'ASAP' ? '' : (btn.dataset.time || '');
+    deliveryTimeInput.value = selectedDeliveryTime;
+  });
+});
+
+modeDeliveryConfirm.addEventListener('click', () => {
+  if (!deliveryNameInput.value.trim() || !deliveryAddressInput.value.trim()) return;
+  orderMode = 'delivery';
+  deliveryInfo = { name: deliveryNameInput.value.trim(), address: deliveryAddressInput.value.trim(), time: selectedDeliveryTime };
+  finalizePendingEntry();
+});
+
+orderModeOverlay.addEventListener('click', () => {
+  pendingEntry = null; pendingCard = null; pendingExpandPanel = null;
+  closeOrderModeModal();
+});
+
+updateCartUI();
+
+// ---- MENU SEARCH ----
+(function() {
+  const searchInput = document.getElementById('menu-search') as HTMLInputElement;
+  const searchClear = document.getElementById('menu-search-clear') as HTMLButtonElement;
+  const searchResults = document.getElementById('menu-search-results')!;
+  if (!searchInput || !searchResults) return;
+
+  const allItems: Array<{id:string; name:string; price:number; desc:string; searchText:string}> = [];
+  MENU_DATA.forEach(s => s.items.forEach(i => {
+    allItems.push({ ...i, searchText: (i.name + ' ' + i.desc).toLowerCase() });
+  }));
+
+  function escapeHtml(s: string) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function highlight(text: string, query: string) {
+    if (!query) return escapeHtml(text);
+    const regex = new RegExp('(' + query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+    return escapeHtml(text).replace(regex, '<mark>$1</mark>');
+  }
+
+  function doSearch() {
+    const q = searchInput.value.trim().toLowerCase();
+    searchClear.hidden = q.length === 0;
+    if (q.length < 2) { searchResults.hidden = true; searchResults.innerHTML = ''; return; }
+
+    const results = allItems.filter(i => i.searchText.includes(q)).slice(0, 12);
+    if (!results.length) {
+      searchResults.innerHTML = `<div class="menu-search-empty">Nessun risultato per "${escapeHtml(q)}"</div>`;
+    } else {
+      searchResults.innerHTML = results.map(i =>
+        `<div class="menu-search-result" data-item-id="${i.id}">
+          <div><div class="menu-search-result-name">${highlight(i.name, q)}</div>
+          ${i.desc ? `<div class="menu-search-result-desc">${highlight(i.desc, q)}</div>` : ''}</div>
+          <div class="menu-search-result-price">${i.price.toFixed(2).replace('.',',')} \u20AC</div>
+        </div>`
+      ).join('');
+    }
+    searchResults.hidden = false;
+  }
+
+  searchInput.addEventListener('input', doSearch);
+  searchClear.addEventListener('click', () => {
+    searchInput.value = ''; searchResults.hidden = true; searchClear.hidden = true; searchInput.focus();
+  });
+
+  searchResults.addEventListener('click', (e) => {
+    const result = (e.target as HTMLElement).closest('.menu-search-result') as HTMLElement;
+    if (!result) return;
+    const card = document.querySelector(`.menu-card[data-item-id="${result.dataset.itemId}"]`);
+    if (card) (card.querySelector('.add-btn') as HTMLElement)?.click();
+    searchInput.value = ''; searchResults.hidden = true; searchClear.hidden = true;
+  });
+})();
+</script>

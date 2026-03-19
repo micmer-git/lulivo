@@ -1,0 +1,36 @@
+---
+import { SITE } from '../data/site.js';
+const base = import.meta.env.BASE_URL;
+const year = new Date().getFullYear();
+---
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-inner">
+      <div>
+        <div class="footer-brand">L'Ulivo</div>
+        <span class="footer-brand-sub">Pizzeria d'Asporto</span>
+        <p style="font-size:0.85rem;">{SITE.address}</p>
+      </div>
+      <div>
+        <div class="footer-heading">Navigazione</div>
+        <ul class="footer-links">
+          <li><a href={`${base}`}>Home</a></li>
+          <li><a href={`${base}menu/`}>Menu & Ordina</a></li>
+          <li><a href={`${base}contatti/`}>Contatti</a></li>
+        </ul>
+      </div>
+      <div>
+        <div class="footer-heading">Contatti</div>
+        <ul class="footer-links">
+          <li><a href={`tel:${SITE.phone.replace(/\s/g,'')}`}>{SITE.phone}</a></li>
+          <li>{SITE.hours}</li>
+          <li>{SITE.address}</li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-copy">
+      &copy; {year} {SITE.name}. Tutti i diritti riservati.
+    </div>
+  </div>
+</footer>

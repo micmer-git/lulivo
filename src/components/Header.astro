@@ -1,0 +1,66 @@
+---
+import { SITE } from '../data/site.js';
+const base = import.meta.env.BASE_URL;
+const { currentPath = '' } = Astro.props;
+const links = [
+  { href: `${base}`, label: 'Home' },
+  { href: `${base}menu/`, label: 'Menu' },
+  { href: `${base}contatti/`, label: 'Contatti' },
+];
+---
+
+<header class="site-header">
+  <div class="container inner">
+    <a href={base} class="site-logo">
+      L'Ulivo
+      <span>Pizzeria</span>
+    </a>
+
+    <div class="nav-actions">
+      <button class="nav-toggle" id="nav-toggle" aria-label="Menu" aria-expanded="false">
+        <svg id="nav-icon-open" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+        <svg id="nav-icon-close" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="display:none"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+
+    <nav class="main-nav" id="main-nav" aria-label="Menu principale">
+      {links.map(link => (
+        <a href={link.href} aria-current={currentPath === link.href ? 'page' : undefined}>{link.label}</a>
+      ))}
+    </nav>
+  </div>
+</header>
+
+<script is:inline>
+(function() {
+  var toggle = document.getElementById('nav-toggle');
+  var nav = document.getElementById('main-nav');
+  var iconOpen = document.getElementById('nav-icon-open');
+  var iconClose = document.getElementById('nav-icon-close');
+
+  function openNav() {
+    nav.classList.add('open');
+    toggle.setAttribute('aria-expanded', 'true');
+    iconOpen.style.display = 'none';
+    iconClose.style.display = '';
+    document.body.classList.add('scroll-locked');
+  }
+  function closeNav() {
+    nav.classList.remove('open');
+    toggle.setAttribute('aria-expanded', 'false');
+    iconOpen.style.display = '';
+    iconClose.style.display = 'none';
+    document.body.classList.remove('scroll-locked');
+  }
+
+  toggle.addEventListener('click', function() {
+    nav.classList.contains('open') ? closeNav() : openNav();
+  });
+  nav.querySelectorAll('a').forEach(function(a) {
+    a.addEventListener('click', closeNav);
+  });
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeNav();
+  });
+})();
+</script>

@@ -1,21 +1,56 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { SITE } from '../data/site.js';
+const base = import.meta.env.BASE_URL;
 ---
-<BaseLayout title={`${SITE.name} — ${SITE.tagline}`}>
-  <section class="hero">
-    <h1>🫒 {SITE.name}</h1>
-    <p>{SITE.tagline}</p>
-    <div class="info">
-      <p>🌿 {SITE.hours}</p>
-      <p>📞 {SITE.phone}</p>
-      <p>📍 {SITE.address}</p>
+<BaseLayout
+  title={`${SITE.name} — ${SITE.tagline}`}
+  currentPath={`${base}`}
+  bodyClass="home-onepager"
+>
+  <section class="hero hero-full home-hero" aria-labelledby="hero-heading">
+    <div class="hero-center-mark" aria-hidden="true">
+      <span class="hero-script">L'Ulivo</span>
+      <span class="hero-subline">Pizzeria d'Asporto</span>
     </div>
-    <div style="margin-top:1.5rem;">
-      <a href={`${import.meta.env.BASE_URL}menu/`}
-         style="display:inline-block;background:var(--gold);color:var(--white);padding:.75rem 2rem;border-radius:999px;font-weight:700;font-size:1.1rem;">
-        Vedi il Menu & Ordina
-      </a>
+
+    <a class="hero-badge badge-menu" href={`${base}menu/`} aria-label="Vai al menu">
+      <svg class="circle-text" viewBox="0 0 120 120" aria-hidden="true">
+        <defs><path id="menu-circle" d="M60,60 m-44,0 a44,44 0 1,1 88,0 a44,44 0 1,1 -88,0" /></defs>
+        <text><textPath href="#menu-circle">• MENU & ORDINA • MENU & ORDINA •</textPath></text>
+      </svg>
+      <span class="circle-center-label">Menu</span>
+    </a>
+
+    <a class="hero-badge badge-phone" href={`tel:${SITE.phone.replace(/\s/g,'')}`} aria-label="Chiama">
+      <svg class="circle-text" viewBox="0 0 120 120" aria-hidden="true">
+        <defs><path id="phone-circle" d="M60,60 m-44,0 a44,44 0 1,1 88,0 a44,44 0 1,1 -88,0" /></defs>
+        <text><textPath href="#phone-circle">• CHIAMA ORA • CHIAMA ORA • CHIAMA •</textPath></text>
+      </svg>
+      <span class="circle-center-label">Chiama</span>
+    </a>
+
+    <div class="container">
+      <h1 id="hero-heading" class="hero-title-hidden">{SITE.name}</h1>
     </div>
   </section>
+
+  <div class="info-strip">
+    <div class="container">
+      <div class="grid">
+        <div>
+          <div class="item-label">Orari</div>
+          <div class="item-value">{SITE.hours}</div>
+        </div>
+        <div>
+          <div class="item-label">Telefono</div>
+          <div class="item-value">{SITE.phone}</div>
+        </div>
+        <div>
+          <div class="item-label">Indirizzo</div>
+          <div class="item-value">Via A. Piatti, 6 — Mozzo</div>
+        </div>
+      </div>
+    </div>
+  </div>
 </BaseLayout>
