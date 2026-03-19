@@ -931,19 +931,20 @@ body.scroll-locked .site-logo { opacity: 0; pointer-events: none; }
 .cart-send-btn { width: 100%; justify-content: center; }
 
 .btn-send {
-  background: var(--green-mid);
+  background: var(--wa-green);
   color: var(--white);
-  border-color: var(--green-deep);
-  box-shadow: 4px 4px 0 var(--green-deep);
+  border-color: #1a8c43;
+  box-shadow: 4px 4px 0 #1a8c43;
   font-size: 0.9rem;
   padding: 0.9rem 1.75rem;
 }
 .btn-send:hover {
-  background: var(--green-deep);
+  background: var(--wa-green-hover);
+  color: var(--white);
   transform: translate(4px, 4px);
-  box-shadow: 0 0 0 var(--green-deep);
+  box-shadow: 0 0 0 #1a8c43;
 }
-.btn-send:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: 4px 4px 0 var(--green-deep); }
+.btn-send:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: 4px 4px 0 #1a8c43; }
 
 @media (min-width: 600px) {
   .cart-drawer { max-width: 460px; left: auto; right: 0; }
