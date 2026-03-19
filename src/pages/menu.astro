@@ -158,7 +158,11 @@ const menuDataJSON = JSON.stringify(
   <div id="order-mode-overlay" class="order-mode-overlay" aria-hidden="true"></div>
   <div id="order-mode-modal" class="order-mode-modal" role="dialog" aria-label="Modalita ordine" aria-hidden="true">
     <h3>Come vuoi ordinare?</h3>
-    <p class="order-mode-sub">Seleziona la modalita per il tuo ordine</p>
+    <p class="order-mode-sub">Seleziona data e modalita per il tuo ordine</p>
+    <div class="order-mode-form" style="display:block;margin-bottom:1rem;">
+      <label class="order-mode-label">Data</label>
+      <input id="order-date" type="date" class="order-mode-input" style="border:2px solid var(--green-deep);border-bottom:2px solid var(--green-deep);padding:.5rem .75rem;" />
+    </div>
     <div class="order-mode-options">
       <button id="mode-pickup-btn" class="order-mode-option">
         <span class="order-mode-icon">🏠</span>
@@ -250,6 +254,12 @@ let cart: CartEntry[] = [];
 let orderMode: 'pickup' | 'delivery' | null = null;
 let customerName: string = '';
 let deliveryInfo: { name: string; address: string; time: string } | null = null;
+let selectedDate: string = '';
+
+function todayISO(): string {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
 
 // ---- Tab switching ----
 const allTabs = document.querySelectorAll<HTMLElement>('.menu-tab');
@@ -527,9 +537,11 @@ cartSendBtn.addEventListener('click', () => {
   // Build WhatsApp message
   let header = '';
   if (orderMode === 'delivery' && deliveryInfo) {
-    header = `*ORDINE — Consegna*\nNome: ${deliveryInfo.name}\nIndirizzo: ${deliveryInfo.address}\nOrario: ${deliveryInfo.time || 'Prima possibile'}\nData: ${ts}`;
+    const dateLabel = selectedDate && selectedDate !== todayISO() ? selectedDate : 'Oggi';
+    header = `*ORDINE — Consegna*\nNome: ${deliveryInfo.name}\nIndirizzo: ${deliveryInfo.address}\nOrario: ${deliveryInfo.time || 'Prima possibile'}\nData: ${dateLabel} (${ts})`;
   } else {
-    header = `*ORDINE — Asporto*\nNome: ${name}\nRitiro: ${selectedPickupTime || 'Prima possibile'}\nData: ${ts}`;
+    const dateLabel = selectedDate && selectedDate !== todayISO() ? selectedDate : 'Oggi';
+    header = `*ORDINE — Asporto*\nNome: ${name}\nRitiro: ${selectedPickupTime || 'Prima possibile'}\nData: ${dateLabel} (${ts})`;
   }
 
   let msg = `${header}\n\n*Articoli:*\n`;
@@ -557,6 +569,8 @@ cartSendBtn.addEventListener('click', () => {
           customerName: name || 'Anonimo',
           orderMode,
           deliveryAddress: deliveryInfo?.address || '',
+          requestedTime: orderMode === 'delivery' ? (deliveryInfo?.time || '') : selectedPickupTime,
+          requestedDate: selectedDate || todayISO(),
           items: cart.map(e => ({ name: e.name, desc: e.desc, qty: e.qty, price: e.price, removed: e.removed, added: e.added, note: e.note || '' })),
           totalPrice: totalPrice(),
           notes: globalNotes || '',
@@ -584,12 +598,7 @@ cartSendBtn.addEventListener('click', () => {
 // ---- Slot data ----
 let slotsData: any = null;
 
-async function fetchSlots() {
-  try {
-    const res = await fetch(`${ORDER_API}/api/slots`);
-    slotsData = await res.json();
-  } catch { slotsData = null; }
-}
+// fetchSlots is now fetchSlotsForDate(date) — defined below
 
 function renderTimePills(container: HTMLElement, onSelect: (time: string) => void) {
   container.innerHTML = '';
@@ -699,9 +708,44 @@ async function showOrderModeModal() {
   selectedPickupTime = '';
   selectedDeliveryTime = '';
   deliveryTimeInput.value = '';
-  // Fetch available slots
-  await fetchSlots();
+  // Init date picker
+  const dateInput = document.getElementById('order-date') as HTMLInputElement;
+  selectedDate = todayISO();
+  dateInput.value = selectedDate;
+  dateInput.min = todayISO();
+  // Fetch slots for selected date
+  await fetchSlotsForDate(selectedDate);
 }
+
+async function fetchSlotsForDate(date: string) {
+  try {
+    const res = await fetch(`${ORDER_API}/api/slots?date=${date}`);
+    slotsData = await res.json();
+  } catch { slotsData = null; }
+
+  // If a mode is already selected, re-render its time pills
+  if (modePickupBtn.classList.contains('selected')) {
+    renderTimePills(document.getElementById('pickup-time-pills')!, (time) => {
+      selectedPickupTime = time;
+      validatePickup();
+    });
+  }
+  if (modeDeliveryBtn.classList.contains('selected')) {
+    renderTimePills(document.getElementById('delivery-time-pills')!, (time) => {
+      selectedDeliveryTime = time;
+      deliveryTimeInput.value = time;
+      validateDelivery();
+    });
+  }
+}
+
+// Date picker change → refetch slots
+document.getElementById('order-date')?.addEventListener('change', async (e) => {
+  selectedDate = (e.target as HTMLInputElement).value || todayISO();
+  selectedPickupTime = '';
+  selectedDeliveryTime = '';
+  await fetchSlotsForDate(selectedDate);
+});
 
 function closeOrderModeModal() {
   orderModeOverlay.classList.remove('open');

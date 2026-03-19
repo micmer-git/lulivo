@@ -430,7 +430,10 @@ function renderOrderCard(o) {
     + '<span class="order-customer">' + esc(o.customerName || 'Anonimo') + '</span>'
     + '<span class="order-mode ' + modeClass + '">' + modeLabel + '</span>'
     + '</div>'
-    + '<div class="order-meta">' + esc(timeStr) + '</div>'
+    + '<div class="order-meta">' + esc(timeStr)
+    + (o.requestedDate ? ' &middot; <strong>Per: ' + esc(o.requestedDate) + '</strong>' : '')
+    + (o.requestedTime ? ' alle <strong>' + esc(o.requestedTime) + '</strong>' : '')
+    + '</div>'
     + addressHtml
     + '<div class="order-items">' + itemsHtml + '</div>'
     + notesHtml
