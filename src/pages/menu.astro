@@ -64,6 +64,22 @@ const menuDataJSON = JSON.stringify(
     </div>
   </div>
 
+  <!-- Voice order button -->
+  <div id="voice-section" class="voice-section" style="display:none;">
+    <div class="container menu-container">
+      <button id="voice-btn" class="voice-btn" type="button" aria-label="Ordina a voce">
+        <svg id="voice-mic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="1" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+        <span id="voice-label">Ordina a voce</span>
+      </button>
+      <div id="voice-status" class="voice-status" hidden>
+        <div class="voice-pulse"></div>
+        <span id="voice-status-text">Sto ascoltando...</span>
+      </div>
+      <div id="voice-transcript" class="voice-transcript" hidden></div>
+      <div id="voice-result" class="voice-result" hidden></div>
+    </div>
+  </div>
+
   <section class="section menu-section-wrap">
     <div class="container menu-container">
 
@@ -680,6 +696,261 @@ function checkIfOpen() {
   }
 }
 checkIfOpen();
+
+// ---- Voice Ordering (Web Speech API) ----
+(function initVoice() {
+  const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+  if (!SpeechRecognition) return; // Browser doesn't support it
+
+  const voiceSection = document.getElementById('voice-section')!;
+  voiceSection.style.display = '';
+  const voiceBtn = document.getElementById('voice-btn')!;
+  const voiceLabel = document.getElementById('voice-label')!;
+  const voiceStatus = document.getElementById('voice-status')!;
+  const voiceStatusText = document.getElementById('voice-status-text')!;
+  const voiceTranscript = document.getElementById('voice-transcript')!;
+  const voiceResult = document.getElementById('voice-result')!;
+
+  let isRecording = false;
+  let recognition: any = null;
+
+  // Italian number parsing
+  const numWords: Record<string, number> = {
+    'una': 1, 'uno': 1, 'un': 1, "un'": 1, 'due': 2, 'tre': 3, 'quattro': 4,
+    'cinque': 5, 'sei': 6, 'sette': 7, 'otto': 8, 'nove': 9, 'dieci': 10,
+  };
+
+  function parseQty(word: string): number {
+    const w = word.toLowerCase().trim();
+    if (numWords[w]) return numWords[w];
+    const n = parseInt(w);
+    return isNaN(n) ? 0 : n;
+  }
+
+  // Fuzzy match menu item names
+  function normalize(s: string): string {
+    return s.toLowerCase()
+      .replace(/[''`]/g, "'")
+      .replace(/[àáâ]/g, 'a').replace(/[èéê]/g, 'e').replace(/[ìíî]/g, 'i')
+      .replace(/[òóô]/g, 'o').replace(/[ùúû]/g, 'u')
+      .replace(/[^a-z0-9 ]/g, '')
+      .trim();
+  }
+
+  function findBestMatch(text: string): {item: ItemData; score: number} | null {
+    const norm = normalize(text);
+    let best: {item: ItemData; score: number} | null = null;
+
+    itemLookup.forEach(item => {
+      const itemNorm = normalize(item.name);
+      // Exact match
+      if (norm.includes(itemNorm)) {
+        const score = itemNorm.length;
+        if (!best || score > best.score) best = { item, score };
+      }
+      // Also try partial (first word match for multi-word names)
+      const words = itemNorm.split(' ');
+      words.forEach(w => {
+        if (w.length >= 4 && norm.includes(w)) {
+          const score = w.length * 0.7;
+          if (!best || score > best.score) best = { item, score };
+        }
+      });
+    });
+
+    return best;
+  }
+
+  function parseTranscript(text: string): Array<{item: ItemData; qty: number; mods: string}> {
+    const results: Array<{item: ItemData; qty: number; mods: string}> = [];
+    // Split by common separators: "e", "poi", "anche", "con", commas
+    const parts = text.split(/\b(?:e poi|poi|e anche|anche|e)\b|,|\./).map(s => s.trim()).filter(Boolean);
+
+    for (const part of parts) {
+      const words = part.split(/\s+/);
+      let qty = 1;
+      let searchText = part;
+
+      // Check first word for quantity
+      if (words.length > 1) {
+        const q = parseQty(words[0]);
+        if (q > 0) {
+          qty = q;
+          searchText = words.slice(1).join(' ');
+        }
+      }
+
+      // Try to find "senza X" modifications
+      let mods = '';
+      const senzaMatch = searchText.match(/\bsenza\s+(.+)/i);
+      if (senzaMatch) {
+        mods = 'senza ' + senzaMatch[1].trim();
+        searchText = searchText.replace(/\bsenza\s+.+/i, '').trim();
+      }
+      const conMatch = searchText.match(/\bcon\s+(.+)/i);
+      if (conMatch) {
+        mods += (mods ? ', ' : '') + 'con ' + conMatch[1].trim();
+        searchText = searchText.replace(/\bcon\s+.+/i, '').trim();
+      }
+
+      const match = findBestMatch(searchText);
+      if (match) {
+        results.push({ item: match.item, qty, mods });
+      }
+    }
+
+    return results;
+  }
+
+  function startRecording() {
+    recognition = new SpeechRecognition();
+    recognition.lang = 'it-IT';
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
+
+    isRecording = true;
+    voiceBtn.classList.add('recording');
+    voiceLabel.textContent = 'Sto ascoltando... (tocca per fermare)';
+    voiceStatus.hidden = false;
+    voiceTranscript.hidden = true;
+    voiceResult.hidden = true;
+    voiceTranscript.textContent = '';
+
+    let finalText = '';
+
+    recognition.onresult = (e: any) => {
+      let interim = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const t = e.results[i][0].transcript;
+        if (e.results[i].isFinal) finalText += t + ' ';
+        else interim = t;
+      }
+      voiceTranscript.hidden = false;
+      voiceTranscript.innerHTML = `<strong>"${finalText}${interim}"</strong>`;
+      voiceStatusText.textContent = interim ? 'Ascolto...' : 'Elaboro...';
+    };
+
+    recognition.onend = () => {
+      isRecording = false;
+      voiceBtn.classList.remove('recording');
+      voiceLabel.textContent = 'Ordina a voce';
+      voiceStatus.hidden = true;
+
+      const text = finalText.trim();
+      if (!text) {
+        voiceTranscript.innerHTML = '<em style="color:var(--text-muted)">Non ho capito. Riprova.</em>';
+        voiceTranscript.hidden = false;
+        return;
+      }
+
+      // Parse the transcript
+      const matches = parseTranscript(text);
+      if (matches.length === 0) {
+        voiceResult.hidden = false;
+        voiceResult.innerHTML = '<div style="color:var(--text-muted)">Non ho trovato pizze nel tuo ordine. Prova a dire ad esempio: <strong>"due margherite e una diavola"</strong></div>';
+        return;
+      }
+
+      // Show matched items
+      let html = '<div style="font-weight:700;margin-bottom:0.5rem;color:var(--green-deep);">Ho capito:</div>';
+      matches.forEach(m => {
+        html += `<div class="match-item">
+          <span class="match-name">${m.qty}× ${m.item.name}</span>
+          <span class="match-qty">€${(m.item.price * m.qty).toFixed(2)}</span>
+        </div>`;
+        if (m.mods) html += `<div style="font-size:.78rem;color:var(--text-muted);padding-left:.5rem;margin-bottom:.25rem;">${m.mods}</div>`;
+      });
+      const total = matches.reduce((s, m) => s + m.item.price * m.qty, 0);
+      html += `<div style="font-weight:700;margin-top:0.5rem;text-align:right;color:var(--green-deep);">Totale: €${total.toFixed(2)}</div>`;
+      html += `<div class="match-actions">
+        <button class="voice-confirm-btn" id="voice-add-all">Aggiungi tutto al carrello</button>
+        <button class="voice-cancel-btn" id="voice-dismiss">Annulla</button>
+      </div>`;
+
+      voiceResult.hidden = false;
+      voiceResult.innerHTML = html;
+
+      document.getElementById('voice-add-all')?.addEventListener('click', () => {
+        // Check if order mode is set
+        if (cart.length === 0 && !orderMode) {
+          // Add all matches as individual entries, trigger order mode on first
+          const entries: CartEntry[] = [];
+          matches.forEach(m => {
+            for (let i = 0; i < m.qty; i++) {
+              entries.push({
+                id: m.item.id + '_' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
+                baseItemId: m.item.id,
+                name: m.item.name,
+                desc: m.item.desc,
+                price: m.item.price,
+                qty: 1,
+                removed: m.mods.match(/senza\s+([^,]+)/i)?.[1]?.split(/\s+e\s+/).map(s => s.trim()) || [],
+                added: m.mods.match(/con\s+([^,]+)/i)?.[1]?.split(/\s+e\s+/).map(s => s.trim()) || [],
+                note: '',
+              });
+            }
+          });
+          pendingEntry = entries[0];
+          (window as any).__pendingExtras = entries.slice(1);
+          pendingCard = document.querySelector(`.menu-card[data-item-id="${entries[0].baseItemId}"]`) as HTMLElement;
+          pendingExpandPanel = pendingCard?.querySelector('.menu-card-expand') as HTMLElement;
+          showOrderModeModal();
+        } else {
+          // Add all directly
+          matches.forEach(m => {
+            for (let i = 0; i < m.qty; i++) {
+              cart.push({
+                id: m.item.id + '_' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
+                baseItemId: m.item.id,
+                name: m.item.name,
+                desc: m.item.desc,
+                price: m.item.price,
+                qty: 1,
+                removed: m.mods.match(/senza\s+([^,]+)/i)?.[1]?.split(/\s+e\s+/).map(s => s.trim()) || [],
+                added: m.mods.match(/con\s+([^,]+)/i)?.[1]?.split(/\s+e\s+/).map(s => s.trim()) || [],
+                note: '',
+              });
+            }
+            // Mark menu card as in-cart
+            const card = document.querySelector(`.menu-card[data-item-id="${m.item.id}"]`) as HTMLElement;
+            if (card) card.classList.add('in-cart');
+          });
+          updateCartUI();
+        }
+        voiceResult.hidden = true;
+        voiceTranscript.hidden = true;
+      });
+
+      document.getElementById('voice-dismiss')?.addEventListener('click', () => {
+        voiceResult.hidden = true;
+        voiceTranscript.hidden = true;
+      });
+    };
+
+    recognition.onerror = (e: any) => {
+      isRecording = false;
+      voiceBtn.classList.remove('recording');
+      voiceLabel.textContent = 'Ordina a voce';
+      voiceStatus.hidden = true;
+      if (e.error === 'not-allowed') {
+        voiceTranscript.hidden = false;
+        voiceTranscript.innerHTML = '<em style="color:var(--red)">Microfono non autorizzato. Controlla i permessi del browser.</em>';
+      }
+    };
+
+    recognition.start();
+  }
+
+  function stopRecording() {
+    if (recognition) recognition.stop();
+  }
+
+  voiceBtn.addEventListener('click', () => {
+    if (isRecording) stopRecording();
+    else startRecording();
+  });
+})();
 
 // ---- Order Mode Modal ----
 const orderModeOverlay = document.getElementById('order-mode-overlay')!;
