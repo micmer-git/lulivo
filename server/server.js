@@ -6,7 +6,7 @@ import crypto from 'node:crypto';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3003;
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'ulivo2024';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'PipettaLibe';
 
 // --- Storage ---
 let db = null;

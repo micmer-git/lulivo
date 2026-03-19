@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: lulivo-orders
+    runtime: node
+    region: frankfurt
+    plan: free
+    rootDir: server
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: PORT
+        value: 3003
+    healthCheckPath: /health
