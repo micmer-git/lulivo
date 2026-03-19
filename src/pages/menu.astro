@@ -242,7 +242,7 @@ MENU_DATA.forEach(s => s.items.forEach(i => itemLookup.set(i.id, i)));
 
 // ---- State ----
 interface CartEntry {
-  id: string; name: string; price: number; qty: number;
+  id: string; baseItemId: string; name: string; desc: string; price: number; qty: number;
   removed: string[]; added: string[]; note: string;
 }
 
@@ -323,7 +323,9 @@ document.querySelectorAll<HTMLElement>('.menu-card').forEach(card => {
     e.stopPropagation();
     const entry: CartEntry = {
       id: itemId + '_' + Date.now(),
+      baseItemId: itemId,
       name: itemData?.name || itemId,
+      desc: itemData?.desc || '',
       price: itemData?.price || 0,
       qty: 1, removed: [], added: [], note: '',
     };
@@ -366,7 +368,9 @@ document.querySelectorAll<HTMLElement>('.menu-card').forEach(card => {
     const noteInput = expandPanel.querySelector('.item-note-input') as HTMLInputElement;
     const entry: CartEntry = {
       id: itemId + '_' + Date.now(),
+      baseItemId: itemId,
       name: itemData?.name || itemId,
+      desc: itemData?.desc || '',
       price: itemData?.price || 0,
       qty: tempQty,
       removed: Array.from(tempRemoved),
@@ -434,6 +438,7 @@ function updateCartUI() {
         <div class="cart-item-actions">
           <div class="cart-item-price">${formatPrice(entry.price * entry.qty)}</div>
           <div class="cart-item-qty">
+            <button class="cart-edit-btn" data-idx="${idx}" aria-label="Modifica" title="Modifica" style="border-color:var(--green-mid);color:var(--green-mid)">✏️</button>
             <button class="cart-remove-btn" data-idx="${idx}" aria-label="Rimuovi">\u{1F5D1}</button>
             <button data-action="dec" data-idx="${idx}">−</button>
             <span>${entry.qty}</span>
@@ -451,6 +456,26 @@ function updateCartUI() {
     });
     cartItemsEl.querySelectorAll('.cart-remove-btn').forEach(btn => {
       btn.addEventListener('click', () => { cart.splice(parseInt((btn as HTMLElement).dataset.idx!),1); updateCartUI(); });
+    });
+    // Edit: close cart, scroll to the menu card, open its expand panel
+    cartItemsEl.querySelectorAll('.cart-edit-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt((btn as HTMLElement).dataset.idx!);
+        const entry = cart[idx];
+        if (!entry) return;
+        const baseId = entry.baseItemId || entry.id.split('_')[0];
+        // Remove this item from cart (user will re-add after editing)
+        cart.splice(idx, 1);
+        updateCartUI();
+        closeCart();
+        // Find and open the menu card's expand panel
+        const card = document.querySelector(`.menu-card[data-item-id="${baseId}"]`) as HTMLElement;
+        if (card) {
+          const editBtn = card.querySelector('.edit-btn') as HTMLElement;
+          if (editBtn) editBtn.click();
+          setTimeout(() => card.scrollIntoView({ behavior: 'smooth', block: 'center' }), 200);
+        }
+      });
     });
   }
 
@@ -521,7 +546,7 @@ cartSendBtn.addEventListener('click', () => {
           customerName: name || 'Anonimo',
           orderMode,
           deliveryAddress: deliveryInfo?.address || '',
-          items: cart.map(e => ({ name: e.name, qty: e.qty, price: e.price, removed: e.removed, added: e.added, note: e.note || '' })),
+          items: cart.map(e => ({ name: e.name, desc: e.desc, qty: e.qty, price: e.price, removed: e.removed, added: e.added, note: e.note || '' })),
           totalPrice: totalPrice(),
           notes: globalNotes || '',
         }),
