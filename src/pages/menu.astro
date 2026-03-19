@@ -149,6 +149,11 @@ const menuDataJSON = JSON.stringify(
     </div>
   </div>
 
+  <!-- Closed banner (hidden by default) -->
+  <div id="closed-banner" style="display:none;background:var(--red);color:white;text-align:center;padding:1rem;font-weight:700;position:fixed;top:56px;left:0;right:0;z-index:200;">
+    <span id="closed-msg"></span>
+  </div>
+
   <!-- Order mode modal -->
   <div id="order-mode-overlay" class="order-mode-overlay" aria-hidden="true"></div>
   <div id="order-mode-modal" class="order-mode-modal" role="dialog" aria-label="Modalita ordine" aria-hidden="true">
@@ -170,6 +175,10 @@ const menuDataJSON = JSON.stringify(
     <div id="mode-pickup-form" class="order-mode-form" style="display:none">
       <label class="order-mode-label">Nome</label>
       <input id="pickup-name" type="text" class="order-mode-input" placeholder="Il tuo nome" />
+      <label class="order-mode-label">Orario ritiro</label>
+      <div id="pickup-time-pills" class="delivery-time-pills" role="listbox">
+        <div style="font-size:.85rem;color:var(--text-muted)">Caricamento orari...</div>
+      </div>
       <button id="mode-pickup-confirm" class="order-mode-confirm" disabled>Conferma asporto</button>
     </div>
     <!-- Delivery form -->
@@ -178,15 +187,10 @@ const menuDataJSON = JSON.stringify(
       <input id="delivery-name" type="text" class="order-mode-input" placeholder="Il tuo nome" />
       <label class="order-mode-label">Indirizzo</label>
       <input id="delivery-address" type="text" class="order-mode-input" placeholder="Via, numero civico, citta" />
-      <label class="order-mode-label">Orario preferito</label>
+      <label class="order-mode-label">Orario consegna</label>
       <input id="delivery-time" type="hidden" value="" />
-      <div class="delivery-time-pills" role="listbox">
-        <button type="button" class="delivery-time-pill" data-time="ASAP">Prima possibile</button>
-        <button type="button" class="delivery-time-pill" data-time="19:00">19:00</button>
-        <button type="button" class="delivery-time-pill" data-time="19:30">19:30</button>
-        <button type="button" class="delivery-time-pill" data-time="20:00">20:00</button>
-        <button type="button" class="delivery-time-pill" data-time="20:30">20:30</button>
-        <button type="button" class="delivery-time-pill" data-time="21:00">21:00</button>
+      <div id="delivery-time-pills" class="delivery-time-pills" role="listbox">
+        <div style="font-size:.85rem;color:var(--text-muted)">Caricamento orari...</div>
       </div>
       <button id="mode-delivery-confirm" class="order-mode-confirm" disabled>Conferma consegna</button>
     </div>
@@ -541,6 +545,97 @@ cartSendBtn.addEventListener('click', () => {
   closeCart();
 });
 
+// ---- Slot data ----
+let slotsData: any = null;
+
+async function fetchSlots() {
+  try {
+    const res = await fetch(`${ORDER_API}/api/slots`);
+    slotsData = await res.json();
+  } catch { slotsData = null; }
+}
+
+function renderTimePills(container: HTMLElement, onSelect: (time: string) => void) {
+  container.innerHTML = '';
+  if (!slotsData || slotsData.closed) {
+    container.innerHTML = '<div style="font-size:.85rem;color:var(--error)">Chiuso oggi</div>';
+    return;
+  }
+  // Group slots into 15-min display intervals
+  const displaySlots: Array<{time: string; available: number; past: boolean}> = [];
+  const seen = new Set<string>();
+  (slotsData.slots || []).forEach((s: any) => {
+    // Round to nearest 15 min for display
+    const [h, m] = s.time.split(':').map(Number);
+    const rounded = Math.floor(m / 15) * 15;
+    const key = `${String(h).padStart(2,'0')}:${String(rounded).padStart(2,'0')}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      // Sum availability for all 5-min slots in this 15-min window
+      const windowSlots = (slotsData.slots || []).filter((ws: any) => {
+        const [wh, wm] = ws.time.split(':').map(Number);
+        return wh === h && wm >= rounded && wm < rounded + 15;
+      });
+      const totalAvail = windowSlots.reduce((s: number, ws: any) => s + ws.available, 0);
+      const allPast = windowSlots.every((ws: any) => ws.past);
+      displaySlots.push({ time: key, available: totalAvail, past: allPast });
+    }
+  });
+
+  if (!displaySlots.length) {
+    container.innerHTML = '<div style="font-size:.85rem;color:var(--text-muted)">Nessun orario disponibile</div>';
+    return;
+  }
+
+  displaySlots.forEach(s => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'delivery-time-pill';
+    if (s.past || s.available <= 0) {
+      btn.disabled = true;
+      btn.style.opacity = '0.35';
+      btn.style.cursor = 'not-allowed';
+    }
+    const label = s.available <= 0 ? `${s.time} (pieno)` : s.past ? `${s.time} (passato)` : s.time;
+    btn.textContent = label;
+    btn.dataset.time = s.time;
+    if (!s.past && s.available > 0) {
+      btn.addEventListener('click', () => {
+        container.querySelectorAll('.delivery-time-pill').forEach(b => (b as HTMLElement).classList.remove('selected'));
+        btn.classList.add('selected');
+        onSelect(s.time);
+      });
+    }
+    container.appendChild(btn);
+  });
+}
+
+// ---- Opening hours check ----
+function checkIfOpen() {
+  const now = new Date();
+  const day = now.getDay();
+  const banner = document.getElementById('closed-banner')!;
+  const msg = document.getElementById('closed-msg')!;
+
+  if (day === 2) { // Tuesday
+    banner.style.display = 'block';
+    msg.textContent = 'Martedì chiuso — gli ordini saranno per il prossimo giorno di apertura';
+    return;
+  }
+  const h = now.getHours(), m = now.getMinutes();
+  const nowMin = h * 60 + m;
+  const openMin = 18 * 60 + 30;
+  const closeMin = 21 * 60 + 30;
+  if (nowMin < openMin) {
+    banner.style.display = 'block';
+    msg.textContent = `Apriamo alle 18:30 — puoi già comporre il tuo ordine!`;
+  } else if (nowMin >= closeMin) {
+    banner.style.display = 'block';
+    msg.textContent = `Siamo chiusi — riapertura domani alle 18:30`;
+  }
+}
+checkIfOpen();
+
 // ---- Order Mode Modal ----
 const orderModeOverlay = document.getElementById('order-mode-overlay')!;
 const orderModeModal = document.getElementById('order-mode-modal')!;
@@ -553,11 +648,11 @@ const modePickupConfirm = document.getElementById('mode-pickup-confirm') as HTML
 const deliveryNameInput = document.getElementById('delivery-name') as HTMLInputElement;
 const deliveryAddressInput = document.getElementById('delivery-address') as HTMLInputElement;
 const deliveryTimeInput = document.getElementById('delivery-time') as HTMLInputElement;
-const deliveryTimeButtons = document.querySelectorAll<HTMLButtonElement>('.delivery-time-pill');
 const modeDeliveryConfirm = document.getElementById('mode-delivery-confirm') as HTMLButtonElement;
+let selectedPickupTime = '';
 let selectedDeliveryTime = '';
 
-function showOrderModeModal() {
+async function showOrderModeModal() {
   orderModeOverlay.classList.add('open');
   orderModeModal.classList.add('open');
   document.body.classList.add('scroll-locked');
@@ -565,9 +660,11 @@ function showOrderModeModal() {
   modeDeliveryForm.style.display = 'none';
   modePickupBtn.classList.remove('selected');
   modeDeliveryBtn.classList.remove('selected');
+  selectedPickupTime = '';
   selectedDeliveryTime = '';
   deliveryTimeInput.value = '';
-  deliveryTimeButtons.forEach(b => b.classList.remove('selected'));
+  // Fetch available slots
+  await fetchSlots();
 }
 
 function closeOrderModeModal() {
@@ -594,6 +691,11 @@ modePickupBtn.addEventListener('click', () => {
   modeDeliveryBtn.classList.remove('selected');
   modePickupForm.style.display = 'block';
   modeDeliveryForm.style.display = 'none';
+  // Render time pills for pickup
+  renderTimePills(document.getElementById('pickup-time-pills')!, (time) => {
+    selectedPickupTime = time;
+    validatePickup();
+  });
 });
 
 modeDeliveryBtn.addEventListener('click', () => {
@@ -601,34 +703,34 @@ modeDeliveryBtn.addEventListener('click', () => {
   modePickupBtn.classList.remove('selected');
   modeDeliveryForm.style.display = 'block';
   modePickupForm.style.display = 'none';
+  // Render time pills for delivery
+  renderTimePills(document.getElementById('delivery-time-pills')!, (time) => {
+    selectedDeliveryTime = time;
+    deliveryTimeInput.value = time;
+    validateDelivery();
+  });
 });
 
-pickupNameInput.addEventListener('input', () => { modePickupConfirm.disabled = !pickupNameInput.value.trim(); });
+function validatePickup() {
+  modePickupConfirm.disabled = !pickupNameInput.value.trim() || !selectedPickupTime;
+}
+pickupNameInput.addEventListener('input', validatePickup);
 
 modePickupConfirm.addEventListener('click', () => {
-  if (!pickupNameInput.value.trim()) return;
+  if (!pickupNameInput.value.trim() || !selectedPickupTime) return;
   orderMode = 'pickup';
   customerName = pickupNameInput.value.trim();
   finalizePendingEntry();
 });
 
 function validateDelivery() {
-  modeDeliveryConfirm.disabled = !deliveryNameInput.value.trim() || !deliveryAddressInput.value.trim();
+  modeDeliveryConfirm.disabled = !deliveryNameInput.value.trim() || !deliveryAddressInput.value.trim() || !selectedDeliveryTime;
 }
 deliveryNameInput.addEventListener('input', validateDelivery);
 deliveryAddressInput.addEventListener('input', validateDelivery);
 
-deliveryTimeButtons.forEach(btn => {
-  btn.addEventListener('click', () => {
-    deliveryTimeButtons.forEach(b => b.classList.remove('selected'));
-    btn.classList.add('selected');
-    selectedDeliveryTime = btn.dataset.time === 'ASAP' ? '' : (btn.dataset.time || '');
-    deliveryTimeInput.value = selectedDeliveryTime;
-  });
-});
-
 modeDeliveryConfirm.addEventListener('click', () => {
-  if (!deliveryNameInput.value.trim() || !deliveryAddressInput.value.trim()) return;
+  if (!deliveryNameInput.value.trim() || !deliveryAddressInput.value.trim() || !selectedDeliveryTime) return;
   orderMode = 'delivery';
   deliveryInfo = { name: deliveryNameInput.value.trim(), address: deliveryAddressInput.value.trim(), time: selectedDeliveryTime };
   finalizePendingEntry();
