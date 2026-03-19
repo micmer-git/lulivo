@@ -1,0 +1,11 @@
+{
+  "name": "lulivo-orders",
+  "type": "module",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.17.0"
+  }
+}

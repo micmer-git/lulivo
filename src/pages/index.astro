@@ -1,0 +1,21 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { SITE } from '../data/site.js';
+---
+<BaseLayout title={`${SITE.name} — ${SITE.tagline}`}>
+  <section class="hero">
+    <h1>🫒 {SITE.name}</h1>
+    <p>{SITE.tagline}</p>
+    <div class="info">
+      <p>🌿 {SITE.hours}</p>
+      <p>📞 {SITE.phone}</p>
+      <p>📍 {SITE.address}</p>
+    </div>
+    <div style="margin-top:1.5rem;">
+      <a href={`${import.meta.env.BASE_URL}menu/`}
+         style="display:inline-block;background:var(--gold);color:var(--white);padding:.75rem 2rem;border-radius:999px;font-weight:700;font-size:1.1rem;">
+        Vedi il Menu & Ordina
+      </a>
+    </div>
+  </section>
+</BaseLayout>

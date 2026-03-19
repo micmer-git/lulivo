@@ -1,0 +1,253 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { MENU, EXTRAS, DELIVERY } from '../data/menu.js';
+import { SITE } from '../data/site.js';
+
+const sections = Object.entries(MENU);
+---
+<BaseLayout title={`Menu — ${SITE.name}`}>
+  <main>
+    <!-- Search -->
+    <div class="search-box">
+      <input type="text" id="searchInput" placeholder="Cerca pizza, ingrediente..." />
+    </div>
+
+    <!-- Tabs -->
+    <div class="menu-tabs" id="menuTabs">
+      <button class="tab-btn active" data-section="all">Tutto</button>
+      {sections.map(([key, sec]) => (
+        <button class="tab-btn" data-section={key}>{sec.icon} {sec.title}</button>
+      ))}
+    </div>
+
+    <!-- Extras banner -->
+    <div class="extras-section">
+      <h3>Extra</h3>
+      <p>🧀 {EXTRAS.cornicioneRicotta.name} — €{EXTRAS.cornicioneRicotta.price.toFixed(2)} ({EXTRAS.cornicioneRicotta.note})</p>
+      <p style="margin-top:.35rem;">🛵 Consegna: Mozzo €{DELIVERY.mozzo.price.toFixed(2)} · Zone limitrofe €{DELIVERY.limitrofi.price.toFixed(2)} · Pizza singola +€{DELIVERY.singola.price.toFixed(2)}</p>
+    </div>
+
+    <!-- Menu sections -->
+    {sections.map(([key, sec]) => (
+      <div class="menu-section" data-menu-section={key}>
+        <h2>{sec.icon} {sec.title}</h2>
+        <div class="menu-grid">
+          {sec.items.map(item => (
+            <div class="menu-item" data-id={item.id} data-name={item.name} data-price={item.price} data-desc={item.desc}>
+              <div class="info">
+                <div class="name">{item.name}</div>
+                <div class="desc">{item.desc}</div>
+              </div>
+              <div class="actions">
+                <span class="price">€{item.price.toFixed(2)}</span>
+                <div class="qty-control">
+                  <button class="qty-btn minus" aria-label="Rimuovi">−</button>
+                  <span class="qty-val">0</span>
+                  <button class="qty-btn plus" aria-label="Aggiungi">+</button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    ))}
+  </main>
+
+  <!-- Cart bar -->
+  <div class="cart-bar" id="cartBar">
+    <div>
+      <span class="cart-info" id="cartCount">0 articoli</span>
+    </div>
+    <span class="cart-total" id="cartTotal">€0.00</span>
+    <button class="btn-order" id="btnOpenOrder">Ordina</button>
+  </div>
+
+  <!-- Order modal -->
+  <div class="modal-overlay" id="orderModal">
+    <div class="modal">
+      <div id="orderFormView">
+        <h2>Il tuo ordine</h2>
+        <div class="order-items" id="orderItems"></div>
+        <div class="order-total" id="orderTotal"></div>
+
+        <div class="form-group">
+          <label for="customerName">Nome</label>
+          <input type="text" id="customerName" required placeholder="Il tuo nome" />
+        </div>
+
+        <div class="form-group">
+          <label for="orderMode">Modalità</label>
+          <select id="orderMode">
+            <option value="asporto">Asporto</option>
+            <option value="delivery">Consegna a domicilio</option>
+          </select>
+        </div>
+
+        <div class="form-group" id="addressGroup" style="display:none;">
+          <label for="deliveryAddress">Indirizzo di consegna</label>
+          <input type="text" id="deliveryAddress" placeholder="Via, civico, città" />
+        </div>
+
+        <div class="form-group">
+          <label for="orderNotes">Note</label>
+          <textarea id="orderNotes" rows="2" placeholder="Allergie, richieste speciali..."></textarea>
+        </div>
+
+        <button class="btn-submit" id="btnSubmit">Conferma Ordine</button>
+        <button class="btn-cancel" id="btnCancel">Annulla</button>
+      </div>
+
+      <div id="orderSuccessView" style="display:none;">
+        <div class="order-success">
+          <div class="check">✅</div>
+          <h3>Ordine inviato!</h3>
+          <p>Grazie <span id="successName"></span>, il tuo ordine è stato ricevuto.</p>
+          <p style="margin-top:.5rem;color:var(--text-light);">Riceverai conferma al ritiro.</p>
+          <button class="btn-submit" style="margin-top:1.5rem;" id="btnNewOrder">Nuovo ordine</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <script define:vars={{ ORDER_API: SITE.ORDER_API }}>
+    const cart = {};
+    const cartBar = document.getElementById('cartBar');
+    const cartCount = document.getElementById('cartCount');
+    const cartTotal = document.getElementById('cartTotal');
+    const modal = document.getElementById('orderModal');
+    const orderItems = document.getElementById('orderItems');
+    const orderTotal = document.getElementById('orderTotal');
+    const toast = document.getElementById('toast');
+
+    // Tabs
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const sec = btn.dataset.section;
+        document.querySelectorAll('.menu-section').forEach(s => {
+          s.style.display = sec === 'all' || s.dataset.menuSection === sec ? '' : 'none';
+        });
+      });
+    });
+
+    // Search
+    document.getElementById('searchInput').addEventListener('input', (e) => {
+      const q = e.target.value.toLowerCase();
+      document.querySelectorAll('.menu-item').forEach(item => {
+        const text = (item.dataset.name + ' ' + item.dataset.desc).toLowerCase();
+        item.style.display = text.includes(q) ? '' : 'none';
+      });
+    });
+
+    // Quantity controls
+    document.querySelectorAll('.menu-item').forEach(item => {
+      const id = item.dataset.id;
+      const name = item.dataset.name;
+      const price = parseFloat(item.dataset.price);
+      const valEl = item.querySelector('.qty-val');
+
+      item.querySelector('.plus').addEventListener('click', (e) => {
+        e.stopPropagation();
+        cart[id] = cart[id] || { name, price, qty: 0 };
+        cart[id].qty++;
+        valEl.textContent = cart[id].qty;
+        updateCart();
+      });
+
+      item.querySelector('.minus').addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (cart[id] && cart[id].qty > 0) {
+          cart[id].qty--;
+          if (cart[id].qty === 0) delete cart[id];
+          valEl.textContent = cart[id]?.qty || 0;
+          updateCart();
+        }
+      });
+    });
+
+    function updateCart() {
+      const items = Object.values(cart);
+      const count = items.reduce((s, i) => s + i.qty, 0);
+      const total = items.reduce((s, i) => s + i.qty * i.price, 0);
+      cartCount.textContent = `${count} articol${count === 1 ? 'o' : 'i'}`;
+      cartTotal.textContent = `€${total.toFixed(2)}`;
+      cartBar.classList.toggle('visible', count > 0);
+    }
+
+    // Order mode toggle
+    document.getElementById('orderMode').addEventListener('change', (e) => {
+      document.getElementById('addressGroup').style.display = e.target.value === 'delivery' ? '' : 'none';
+    });
+
+    // Open order modal
+    document.getElementById('btnOpenOrder').addEventListener('click', () => {
+      const items = Object.values(cart).filter(i => i.qty > 0);
+      const total = items.reduce((s, i) => s + i.qty * i.price, 0);
+      orderItems.innerHTML = items.map(i =>
+        `<div class="order-item"><span>${i.qty}× ${i.name}</span><span>€${(i.qty * i.price).toFixed(2)}</span></div>`
+      ).join('');
+      orderTotal.textContent = `Totale: €${total.toFixed(2)}`;
+      document.getElementById('orderFormView').style.display = '';
+      document.getElementById('orderSuccessView').style.display = 'none';
+      modal.classList.add('open');
+    });
+
+    // Cancel
+    document.getElementById('btnCancel').addEventListener('click', () => modal.classList.remove('open'));
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('open'); });
+
+    // Submit order
+    document.getElementById('btnSubmit').addEventListener('click', async () => {
+      const name = document.getElementById('customerName').value.trim();
+      if (!name) { showToast('Inserisci il tuo nome'); return; }
+
+      const items = Object.values(cart).filter(i => i.qty > 0);
+      const total = items.reduce((s, i) => s + i.qty * i.price, 0);
+      const mode = document.getElementById('orderMode').value;
+
+      const order = {
+        customerName: name,
+        orderMode: mode,
+        deliveryAddress: mode === 'delivery' ? document.getElementById('deliveryAddress').value : '',
+        items: items.map(i => ({ name: i.name, qty: i.qty, price: i.price })),
+        totalPrice: total,
+        notes: document.getElementById('orderNotes').value,
+      };
+
+      try {
+        const res = await fetch(`${ORDER_API}/api/orders`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(order),
+        });
+        if (!res.ok) throw new Error('Errore');
+
+        document.getElementById('successName').textContent = name;
+        document.getElementById('orderFormView').style.display = 'none';
+        document.getElementById('orderSuccessView').style.display = '';
+
+        // Reset cart
+        Object.keys(cart).forEach(k => delete cart[k]);
+        document.querySelectorAll('.qty-val').forEach(v => v.textContent = '0');
+        updateCart();
+      } catch (err) {
+        showToast('Errore nell\'invio. Riprova o chiama il ' + '035 611616');
+      }
+    });
+
+    // New order
+    document.getElementById('btnNewOrder').addEventListener('click', () => {
+      modal.classList.remove('open');
+    });
+
+    function showToast(msg) {
+      toast.textContent = msg;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 3000);
+    }
+  </script>
+</BaseLayout>

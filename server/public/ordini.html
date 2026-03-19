@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>L'Ulivo — Ordini</title>
+  <style>
+    :root { --green: #2d5016; --green-l: #4a7c23; --cream: #faf8f0; --gold: #c5960c; --red: #c0392b; --text: #1a1a1a; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--cream); color: var(--text); min-height: 100vh; }
+
+    /* Login */
+    .login-screen {
+      display: flex; align-items: center; justify-content: center; min-height: 100vh;
+      background: linear-gradient(135deg, var(--green) 0%, #1a3a08 100%);
+    }
+    .login-box {
+      background: white; border-radius: 16px; padding: 2.5rem; width: 90%; max-width: 380px;
+      box-shadow: 0 8px 32px rgba(0,0,0,.2); text-align: center;
+    }
+    .login-box h1 { color: var(--green); margin-bottom: .5rem; }
+    .login-box p { color: #666; margin-bottom: 1.5rem; }
+    .login-box input {
+      width: 100%; padding: .75rem 1rem; border: 2px solid #ddd; border-radius: 8px;
+      font-size: 1rem; margin-bottom: 1rem; outline: none; text-align: center;
+    }
+    .login-box input:focus { border-color: var(--green-l); }
+    .login-box button {
+      width: 100%; padding: .75rem; background: var(--green); color: white; border: none;
+      border-radius: 8px; font-size: 1.05rem; font-weight: 700; cursor: pointer;
+    }
+    .login-box button:hover { background: var(--green-l); }
+    .login-error { color: var(--red); font-size: .9rem; margin-top: .5rem; display: none; }
+
+    /* Dashboard */
+    .dashboard { display: none; }
+    .dash-header {
+      background: var(--green); color: white; padding: 1rem; display: flex;
+      justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 10;
+    }
+    .dash-header h1 { font-size: 1.2rem; }
+    .btn-logout {
+      background: rgba(255,255,255,.15); color: white; border: none; padding: .4rem 1rem;
+      border-radius: 8px; cursor: pointer; font-weight: 600;
+    }
+
+    .stats-bar {
+      display: flex; gap: 1rem; padding: 1rem; flex-wrap: wrap;
+    }
+    .stat-card {
+      background: white; border-radius: 12px; padding: 1rem 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,.08);
+      flex: 1; min-width: 120px; text-align: center;
+    }
+    .stat-card .num { font-size: 1.8rem; font-weight: 700; color: var(--green); }
+    .stat-card .label { font-size: .8rem; color: #888; }
+
+    .filters {
+      padding: 0 1rem; display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: 1rem;
+    }
+    .filter-btn {
+      padding: .35rem .75rem; border: 2px solid var(--green-l); background: white;
+      border-radius: 999px; cursor: pointer; font-weight: 600; font-size: .85rem; color: var(--green);
+    }
+    .filter-btn.active { background: var(--green-l); color: white; }
+
+    .orders-list { padding: 0 1rem 2rem; }
+
+    .order-card {
+      background: white; border-radius: 12px; padding: 1.25rem; margin-bottom: .75rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,.08); border-left: 4px solid var(--gold);
+    }
+    .order-card.completed { border-left-color: var(--green-l); opacity: .7; }
+    .order-card .header {
+      display: flex; justify-content: space-between; align-items: center; margin-bottom: .75rem;
+    }
+    .order-card .customer { font-weight: 700; font-size: 1.1rem; }
+    .order-card .time { color: #888; font-size: .85rem; }
+    .order-card .mode {
+      display: inline-block; background: #e8f5e9; color: var(--green); padding: .15rem .5rem;
+      border-radius: 6px; font-size: .8rem; font-weight: 600;
+    }
+    .order-card .mode.delivery { background: #fff3e0; color: #e65100; }
+    .order-card .items { margin: .5rem 0; }
+    .order-card .item-line { font-size: .9rem; padding: .15rem 0; }
+    .order-card .total { font-weight: 700; color: var(--green); font-size: 1.1rem; margin-top: .5rem; }
+    .order-card .notes { color: #888; font-size: .85rem; font-style: italic; margin-top: .35rem; }
+    .order-card .actions { display: flex; gap: .5rem; margin-top: .75rem; }
+    .order-card .btn-action {
+      padding: .35rem .75rem; border: none; border-radius: 6px; cursor: pointer;
+      font-weight: 600; font-size: .85rem;
+    }
+    .btn-done { background: var(--green-l); color: white; }
+    .btn-del { background: var(--red); color: white; }
+    .btn-pending { background: var(--gold); color: white; }
+
+    .empty-state { text-align: center; padding: 3rem 1rem; color: #888; }
+    .empty-state .icon { font-size: 3rem; }
+
+    .auto-refresh { font-size: .75rem; color: #aaa; text-align: center; padding: .5rem; }
+  </style>
+</head>
+<body>
+  <!-- Login screen -->
+  <div class="login-screen" id="loginScreen">
+    <div class="login-box">
+      <h1>🫒 L'Ulivo</h1>
+      <p>Pannello Ordini</p>
+      <input type="password" id="pwInput" placeholder="Password" autofocus />
+      <button id="btnLogin">Accedi</button>
+      <div class="login-error" id="loginError">Password errata</div>
+    </div>
+  </div>
+
+  <!-- Dashboard -->
+  <div class="dashboard" id="dashboard">
+    <div class="dash-header">
+      <h1>🫒 Ordini L'Ulivo</h1>
+      <button class="btn-logout" id="btnLogout">Esci</button>
+    </div>
+
+    <div class="stats-bar" id="statsBar">
+      <div class="stat-card"><div class="num" id="statPending">0</div><div class="label">In attesa</div></div>
+      <div class="stat-card"><div class="num" id="statDone">0</div><div class="label">Completati</div></div>
+      <div class="stat-card"><div class="num" id="statRevenue">€0</div><div class="label">Incasso oggi</div></div>
+    </div>
+
+    <div class="filters">
+      <button class="filter-btn active" data-filter="all">Tutti</button>
+      <button class="filter-btn" data-filter="pending">In attesa</button>
+      <button class="filter-btn" data-filter="completed">Completati</button>
+    </div>
+
+    <div class="orders-list" id="ordersList"></div>
+    <div class="auto-refresh">Aggiornamento automatico ogni 15 secondi</div>
+  </div>
+
+  <script>
+    const loginScreen = document.getElementById('loginScreen');
+    const dashboard = document.getElementById('dashboard');
+    const ordersList = document.getElementById('ordersList');
+    let currentFilter = 'all';
+    let allOrders = [];
+
+    // Login
+    async function login() {
+      const pw = document.getElementById('pwInput').value;
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pw }),
+      });
+      if (res.ok) {
+        loginScreen.style.display = 'none';
+        dashboard.style.display = 'block';
+        loadOrders();
+      } else {
+        document.getElementById('loginError').style.display = 'block';
+      }
+    }
+
+    document.getElementById('btnLogin').addEventListener('click', login);
+    document.getElementById('pwInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') login();
+    });
+
+    // Check if already authed
+    fetch('/api/auth').then(r => r.json()).then(d => {
+      if (d.authenticated) {
+        loginScreen.style.display = 'none';
+        dashboard.style.display = 'block';
+        loadOrders();
+      }
+    });
+
+    // Logout
+    document.getElementById('btnLogout').addEventListener('click', async () => {
+      await fetch('/api/logout', { method: 'POST' });
+      dashboard.style.display = 'none';
+      loginScreen.style.display = 'flex';
+      document.getElementById('pwInput').value = '';
+    });
+
+    // Filters
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentFilter = btn.dataset.filter;
+        renderOrders();
+      });
+    });
+
+    // Load orders
+    async function loadOrders() {
+      try {
+        const res = await fetch('/api/orders');
+        if (res.status === 401) {
+          dashboard.style.display = 'none';
+          loginScreen.style.display = 'flex';
+          return;
+        }
+        allOrders = await res.json();
+        renderOrders();
+      } catch (e) {
+        ordersList.innerHTML = '<div class="empty-state"><div class="icon">⚠️</div><p>Errore di connessione</p></div>';
+      }
+    }
+
+    function renderOrders() {
+      const today = new Date().toISOString().slice(0, 10);
+      const todayOrders = allOrders.filter(o => o.timestamp?.startsWith(today));
+
+      // Stats
+      const pending = todayOrders.filter(o => (o.status || 'pending') === 'pending');
+      const completed = todayOrders.filter(o => o.status === 'completed');
+      document.getElementById('statPending').textContent = pending.length;
+      document.getElementById('statDone').textContent = completed.length;
+      document.getElementById('statRevenue').textContent = '€' + todayOrders.reduce((s, o) => s + (o.totalPrice || 0), 0).toFixed(0);
+
+      // Filter
+      let filtered = allOrders;
+      if (currentFilter === 'pending') filtered = allOrders.filter(o => (o.status || 'pending') === 'pending');
+      if (currentFilter === 'completed') filtered = allOrders.filter(o => o.status === 'completed');
+
+      if (!filtered.length) {
+        ordersList.innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>Nessun ordine</p></div>';
+        return;
+      }
+
+      ordersList.innerHTML = filtered.map(o => {
+        const status = o.status || 'pending';
+        const isCompleted = status === 'completed';
+        const time = o.timestamp ? new Date(o.timestamp).toLocaleString('it-IT', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : '';
+        const items = (o.items || []).map(i => `<div class="item-line">${i.qty}× ${i.name} — €${(i.qty * i.price).toFixed(2)}</div>`).join('');
+        const modeClass = o.orderMode === 'delivery' ? 'delivery' : '';
+        const modeLabel = o.orderMode === 'delivery' ? '🛵 Consegna' : '🏠 Asporto';
+
+        return `
+          <div class="order-card ${isCompleted ? 'completed' : ''}">
+            <div class="header">
+              <div>
+                <span class="customer">${esc(o.customerName)}</span>
+                <span class="mode ${modeClass}">${modeLabel}</span>
+                ${o.deliveryAddress ? `<div style="font-size:.85rem;color:#666;margin-top:.25rem;">📍 ${esc(o.deliveryAddress)}</div>` : ''}
+              </div>
+              <span class="time">${time}</span>
+            </div>
+            <div class="items">${items}</div>
+            <div class="total">€${(o.totalPrice || 0).toFixed(2)}</div>
+            ${o.notes ? `<div class="notes">📝 ${esc(o.notes)}</div>` : ''}
+            <div class="actions">
+              ${isCompleted
+                ? `<button class="btn-action btn-pending" onclick="setStatus('${o.id}','pending')">↩ Riapri</button>`
+                : `<button class="btn-action btn-done" onclick="setStatus('${o.id}','completed')">✅ Completato</button>`
+              }
+              <button class="btn-action btn-del" onclick="delOrder('${o.id}')">🗑 Elimina</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+    window.setStatus = async (id, status) => {
+      await fetch(`/api/orders/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      loadOrders();
+    };
+
+    window.delOrder = async (id) => {
+      if (!confirm('Eliminare questo ordine?')) return;
+      await fetch(`/api/orders/${id}`, { method: 'DELETE' });
+      loadOrders();
+    };
+
+    // Auto-refresh every 15s
+    setInterval(loadOrders, 15000);
+  </script>
+</body>
+</html>

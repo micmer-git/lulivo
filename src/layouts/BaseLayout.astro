@@ -1,0 +1,40 @@
+---
+import { SITE } from '../data/site.js';
+const { title = SITE.name } = Astro.props;
+---
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{title}</title>
+  <meta name="description" content={`${SITE.name} — ${SITE.tagline}. ${SITE.address}`} />
+  <link rel="icon" href={`${import.meta.env.BASE_URL}favicon.svg`} />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" />
+  <style is:global>
+    @import '../styles/global.css';
+    body { font-family: 'Inter', var(--font); }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <a href={`${import.meta.env.BASE_URL}`} class="site-logo">
+        🫒 {SITE.name}
+      </a>
+      <nav>
+        <ul class="nav-links">
+          <li><a href={`${import.meta.env.BASE_URL}menu/`}>Menu</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <slot />
+
+  <footer class="site-footer">
+    <p>{SITE.name} — {SITE.address}</p>
+    <p>📞 {SITE.phone} · {SITE.hours}</p>
+  </footer>
+</body>
+</html>
