@@ -91,6 +91,32 @@
     .btn-delete:hover{background:#fde8e8}
     .no-orders{text-align:center;padding:3rem 1rem;color:var(--muted);font-size:1rem}
 
+    /* ── Messages ── */
+    .msg-badge{display:inline-flex;align-items:center;justify-content:center;background:var(--gold);color:var(--white);font-size:.65rem;font-weight:700;min-width:1.2rem;height:1.2rem;border-radius:50%;padding:0 .3rem;margin-left:.4rem;vertical-align:middle}
+    .msg-badge.has-messages{background:var(--green-mid)}
+    .msg-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--gold);margin-left:.4rem;animation:pulse 1.5s infinite}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+    .order-messages{display:none;margin-top:.75rem;padding-top:.75rem;border-top:2px solid var(--slate)}
+    .order-messages.open{display:block}
+    .btn-toggle-msgs{border-color:var(--green-deep);color:var(--green-deep);display:inline-flex;align-items:center;gap:.3rem}
+    .btn-toggle-msgs:hover{background:var(--green-xlight)}
+    .msgs-list{max-height:200px;overflow-y:auto;margin-bottom:.5rem}
+    .msg-bubble{padding:.4rem .6rem;margin-bottom:.4rem;font-size:.82rem;line-height:1.4;border:1px solid var(--slate)}
+    .msg-bubble.customer{background:var(--warm);border-left:3px solid var(--gold);margin-right:2rem}
+    .msg-bubble.pizzeria{background:var(--green-xlight);border-left:3px solid var(--green-mid);margin-left:2rem}
+    .msg-sender{font-weight:700;font-size:.65rem;text-transform:uppercase;letter-spacing:.5px}
+    .msg-bubble.customer .msg-sender{color:var(--gold)}
+    .msg-bubble.pizzeria .msg-sender{color:var(--green-mid)}
+    .msg-time{font-size:.65rem;color:var(--muted);float:right}
+    .msg-text{word-break:break-word}
+    .msg-reply-row{display:flex;gap:.4rem}
+    .msg-reply-input{flex:1;padding:.4rem .6rem;border:2px solid var(--slate);font-size:.82rem;font-family:var(--font);outline:none}
+    .msg-reply-input:focus{border-color:var(--green-mid)}
+    .msg-reply-btn{padding:.4rem .7rem;background:var(--green-deep);color:var(--white);border:none;font-size:.78rem;font-weight:700;cursor:pointer;font-family:var(--font);text-transform:uppercase;letter-spacing:.3px}
+    .msg-reply-btn:hover{background:var(--green-mid)}
+    .no-msgs{text-align:center;color:var(--muted);font-size:.8rem;padding:.5rem}
+    .order-tracking-id{font-family:var(--display);font-size:.75rem;color:var(--muted);letter-spacing:1px;margin-left:.5rem}
+
     /* ── Insights Tab ── */
     .insights-header{display:flex;align-items:center;gap:1rem;margin-bottom:1.25rem;flex-wrap:wrap}
     .insights-header label{font-family:var(--display);font-size:1rem;text-transform:uppercase;letter-spacing:1px;color:var(--green-deep);font-weight:600}
@@ -244,6 +270,8 @@ let currentFilter = 'all';
 let refreshTimer = null;
 let calendarData = [];
 let inventoryCache = {};
+let messageCounts = {};
+let loadedMessages = {};
 
 const DAYS_IT = ['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
 const MONTHS_IT = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
@@ -336,9 +364,10 @@ function switchTab(tab) {
 
 /* ═══════════ ORDERS TAB ═══════════ */
 async function loadOrders() {
-  const r = await api('/api/orders');
+  const [r, mcR] = await Promise.all([api('/api/orders'), api('/api/messages/counts')]);
   if (!r) return;
   try { allOrders = await r.json(); } catch(e) { allOrders = []; }
+  if (mcR) { try { messageCounts = await mcR.json(); } catch(e) { messageCounts = {}; } }
   updateStats();
   renderOrders();
 }
@@ -425,22 +454,40 @@ function renderOrderCard(o) {
     : '<button class="btn-action btn-complete" onclick="updateOrder(\'' + esc(o.id) + '\',\'completed\')">\u2705 Completato</button>'
       + '<button class="btn-action btn-delete" onclick="deleteOrder(\'' + esc(o.id) + '\')">\uD83D\uDDD1 Elimina</button>';
 
-  return '<div class="order-card' + (isCompleted ? ' completed' : '') + '">'
+  const trackId = o.tracking_id || '';
+  const msgCount = messageCounts[trackId] || 0;
+  const msgBadgeHtml = msgCount > 0
+    ? '<span class="msg-badge has-messages">' + msgCount + '</span><span class="msg-dot"></span>'
+    : '';
+
+  const msgToggleBtn = '<button class="btn-action btn-toggle-msgs" onclick="toggleMessages(\'' + esc(o.id) + '\',\'' + esc(trackId) + '\',this)">&#128172;' + (msgCount > 0 ? ' ' + msgCount : '') + '</button>';
+
+  return '<div class="order-card' + (isCompleted ? ' completed' : '') + '" id="order-' + esc(o.id) + '">'
     + '<div class="order-header">'
-    + '<span class="order-customer">' + esc(o.customerName || 'Anonimo') + '</span>'
+    + '<span class="order-customer">' + esc(o.customerName || 'Anonimo') + msgBadgeHtml
+    + (trackId ? '<span class="order-tracking-id">' + esc(trackId) + '</span>' : '') + '</span>'
     + '<span class="order-mode ' + modeClass + '">' + modeLabel + '</span>'
     + '</div>'
     + '<div class="order-meta">' + esc(timeStr)
     + (o.requestedDate ? ' &middot; <strong>Per: ' + esc(o.requestedDate) + '</strong>' : '')
     + (o.requestedTime ? ' alle <strong>' + esc(o.requestedTime) + '</strong>' : '')
+    + (o.phone ? ' &middot; Tel: ' + esc(o.phone) : '')
     + '</div>'
     + addressHtml
     + '<div class="order-items">' + itemsHtml + '</div>'
     + notesHtml
     + '<div class="order-footer">'
     + '<div class="order-total">\u20AC ' + esc(fmt(o.totalPrice || 0)) + '</div>'
-    + '<div class="order-actions">' + actionBtns + '</div>'
-    + '</div></div>';
+    + '<div class="order-actions">' + msgToggleBtn + actionBtns + '</div>'
+    + '</div>'
+    + '<div class="order-messages" id="msgs-' + esc(o.id) + '">'
+    + '<div class="msgs-list" id="msgs-list-' + esc(o.id) + '"><div class="no-msgs">Caricamento...</div></div>'
+    + '<div class="msg-reply-row">'
+    + '<input type="text" class="msg-reply-input" id="msg-input-' + esc(o.id) + '" placeholder="Rispondi..." maxlength="500" onkeydown="if(event.key===\'Enter\')sendAdminMsg(\'' + esc(o.id) + '\')" />'
+    + '<button class="msg-reply-btn" onclick="sendAdminMsg(\'' + esc(o.id) + '\')">Invia</button>'
+    + '</div>'
+    + '</div>'
+    + '</div>';
 }
 
 async function updateOrder(id, status) {
@@ -456,6 +503,63 @@ async function deleteOrder(id) {
   if (!confirm('Eliminare questo ordine?')) return;
   await api('/api/orders/' + encodeURIComponent(id), { method: 'DELETE' });
   loadOrders();
+}
+
+/* ═══════════ MESSAGES ═══════════ */
+async function toggleMessages(orderId, trackingId, btn) {
+  const panel = document.getElementById('msgs-' + orderId);
+  if (!panel) return;
+  const isOpen = panel.classList.contains('open');
+  // Close all open panels first
+  document.querySelectorAll('.order-messages.open').forEach(p => p.classList.remove('open'));
+  if (isOpen) return;
+  panel.classList.add('open');
+  // Fetch messages
+  const list = document.getElementById('msgs-list-' + orderId);
+  list.innerHTML = '<div class="no-msgs">Caricamento...</div>';
+  const r = await api('/api/orders/' + encodeURIComponent(orderId) + '/messages');
+  if (!r) { list.innerHTML = '<div class="no-msgs">Errore</div>'; return; }
+  let msgs = [];
+  try { msgs = await r.json(); } catch(e) {}
+  loadedMessages[orderId] = msgs;
+  renderAdminMsgs(orderId, msgs);
+}
+
+function renderAdminMsgs(orderId, msgs) {
+  const list = document.getElementById('msgs-list-' + orderId);
+  if (!msgs || !msgs.length) { list.innerHTML = '<div class="no-msgs">Nessun messaggio</div>'; return; }
+  list.innerHTML = msgs.map(function(m) {
+    var cls = m.sender === 'customer' ? 'customer' : 'pizzeria';
+    var label = m.sender === 'customer' ? 'Cliente' : 'Pizzeria';
+    var time = m.created_at ? new Date(m.created_at).toLocaleString('it-IT', { hour:'2-digit', minute:'2-digit', day:'2-digit', month:'short' }) : '';
+    return '<div class="msg-bubble ' + cls + '">'
+      + '<span class="msg-time">' + esc(time) + '</span>'
+      + '<div class="msg-sender">' + esc(label) + '</div>'
+      + '<div class="msg-text">' + esc(m.text) + '</div>'
+      + '</div>';
+  }).join('');
+  list.scrollTop = list.scrollHeight;
+}
+
+async function sendAdminMsg(orderId) {
+  var input = document.getElementById('msg-input-' + orderId);
+  if (!input) return;
+  var text = input.value.trim();
+  if (!text) return;
+  var r = await api('/api/orders/' + encodeURIComponent(orderId) + '/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text: text })
+  });
+  if (r && r.ok) {
+    input.value = '';
+    // Re-fetch messages
+    var r2 = await api('/api/orders/' + encodeURIComponent(orderId) + '/messages');
+    if (r2) {
+      var msgs = await r2.json();
+      renderAdminMsgs(orderId, msgs);
+    }
+  }
 }
 
 /* ═══════════ INSIGHTS TAB ═══════════ */

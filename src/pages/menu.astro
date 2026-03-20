@@ -196,6 +196,8 @@ const menuDataJSON = JSON.stringify(
     <div id="mode-pickup-form" class="order-mode-form" style="display:none">
       <label class="order-mode-label">Nome</label>
       <input id="pickup-name" type="text" class="order-mode-input" placeholder="Il tuo nome" />
+      <label class="order-mode-label">Telefono</label>
+      <input id="pickup-phone" type="tel" class="order-mode-input" placeholder="+39 345 1234567" />
       <label class="order-mode-label">Orario ritiro</label>
       <div id="pickup-time-pills" class="delivery-time-pills" role="listbox">
         <div style="font-size:.85rem;color:var(--text-muted)">Caricamento orari...</div>
@@ -206,6 +208,8 @@ const menuDataJSON = JSON.stringify(
     <div id="mode-delivery-form" class="order-mode-form" style="display:none">
       <label class="order-mode-label">Nome</label>
       <input id="delivery-name" type="text" class="order-mode-input" placeholder="Il tuo nome" />
+      <label class="order-mode-label">Telefono</label>
+      <input id="delivery-phone" type="tel" class="order-mode-input" placeholder="+39 345 1234567" />
       <label class="order-mode-label">Indirizzo</label>
       <input id="delivery-address" type="text" class="order-mode-input" placeholder="Via, numero civico, citta" />
       <label class="order-mode-label">Orario consegna</label>
@@ -270,7 +274,8 @@ interface CartEntry {
 let cart: CartEntry[] = [];
 let orderMode: 'pickup' | 'delivery' | null = null;
 let customerName: string = '';
-let deliveryInfo: { name: string; address: string; time: string } | null = null;
+let customerPhone: string = '';
+let deliveryInfo: { name: string; address: string; time: string; phone: string } | null = null;
 let selectedDate: string = '';
 
 function todayISO(): string {
@@ -555,11 +560,12 @@ cartOverlay.addEventListener('click', closeCart);
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && cartDrawer.classList.contains('open')) closeCart(); });
 
 // ---- Send Order ----
-cartSendBtn.addEventListener('click', () => {
+cartSendBtn.addEventListener('click', async () => {
   if (cart.length === 0 || !orderMode) return;
 
   const globalNotes = (document.getElementById('order-notes-global') as HTMLTextAreaElement)?.value?.trim();
   const name = orderMode === 'delivery' && deliveryInfo ? deliveryInfo.name : customerName;
+  const phone = customerPhone || '';
   const ts = new Date().toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' });
 
   // Build WhatsApp message
@@ -585,16 +591,18 @@ cartSendBtn.addEventListener('click', () => {
   msg += `\n*TOTALE: ${formatPrice(totalPrice())}*`;
   if (globalNotes) msg += `\n\n*Note:* ${globalNotes}`;
 
-  const waUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`;
-
-  // Log order to backend (fire-and-forget, never blocks WhatsApp)
+  // Log order to backend and get tracking_id
+  let trackingId = '';
   if (ORDER_API) {
     try {
-      fetch(`${ORDER_API}/api/orders`, {
+      cartSendBtn.disabled = true;
+      cartSendBtn.textContent = 'Invio in corso...';
+      const resp = await fetch(`${ORDER_API}/api/orders`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customerName: name || 'Anonimo',
+          phone,
           orderMode,
           deliveryAddress: deliveryInfo?.address || '',
           requestedTime: orderMode === 'delivery' ? (deliveryInfo?.time || '') : selectedPickupTime,
@@ -603,9 +611,22 @@ cartSendBtn.addEventListener('click', () => {
           totalPrice: totalPrice(),
           notes: globalNotes || '',
         }),
-      }).catch(() => {});
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        trackingId = data.tracking_id || '';
+      }
     } catch {}
+    cartSendBtn.disabled = false;
+    cartSendBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg> Invia ordine via WhatsApp';
   }
+
+  // Append tracking link if available
+  if (trackingId && ORDER_API) {
+    msg += `\n\n\uD83D\uDCE6 Segui il tuo ordine: ${ORDER_API}/track?id=${trackingId}`;
+  }
+
+  const waUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`;
 
   // Open WhatsApp
   const a = document.createElement('a');
@@ -974,8 +995,10 @@ const modeDeliveryBtn = document.getElementById('mode-delivery-btn')!;
 const modePickupForm = document.getElementById('mode-pickup-form')!;
 const modeDeliveryForm = document.getElementById('mode-delivery-form')!;
 const pickupNameInput = document.getElementById('pickup-name') as HTMLInputElement;
+const pickupPhoneInput = document.getElementById('pickup-phone') as HTMLInputElement;
 const modePickupConfirm = document.getElementById('mode-pickup-confirm') as HTMLButtonElement;
 const deliveryNameInput = document.getElementById('delivery-name') as HTMLInputElement;
+const deliveryPhoneInput = document.getElementById('delivery-phone') as HTMLInputElement;
 const deliveryAddressInput = document.getElementById('delivery-address') as HTMLInputElement;
 const deliveryTimeInput = document.getElementById('delivery-time') as HTMLInputElement;
 const modeDeliveryConfirm = document.getElementById('mode-delivery-confirm') as HTMLButtonElement;
@@ -1088,6 +1111,7 @@ modePickupConfirm.addEventListener('click', () => {
   if (!pickupNameInput.value.trim() || !selectedPickupTime) return;
   orderMode = 'pickup';
   customerName = pickupNameInput.value.trim();
+  customerPhone = (pickupPhoneInput.value || '').trim().replace(/\s+/g, '');
   finalizePendingEntry();
 });
 
@@ -1100,7 +1124,8 @@ deliveryAddressInput.addEventListener('input', validateDelivery);
 modeDeliveryConfirm.addEventListener('click', () => {
   if (!deliveryNameInput.value.trim() || !deliveryAddressInput.value.trim() || !selectedDeliveryTime) return;
   orderMode = 'delivery';
-  deliveryInfo = { name: deliveryNameInput.value.trim(), address: deliveryAddressInput.value.trim(), time: selectedDeliveryTime };
+  deliveryInfo = { name: deliveryNameInput.value.trim(), address: deliveryAddressInput.value.trim(), time: selectedDeliveryTime, phone: (deliveryPhoneInput.value || '').trim().replace(/\s+/g, '') };
+  customerPhone = deliveryInfo.phone;
   finalizePendingEntry();
 });
 
