@@ -442,7 +442,31 @@ body.scroll-locked .site-logo { opacity: 0; pointer-events: none; }
 @media (max-width: 820px) {
   .hero-badge { width: clamp(110px, 26vw, 160px); }
   .badge-menu { top: clamp(5rem, 20vw, 7rem); right: 0.7rem; }
-  .badge-phone { top: auto; bottom: 2.5rem; transform: none; left: 0.7rem; }
+  .badge-phone {
+    top: auto;
+    bottom: max(1rem, calc(1rem + env(safe-area-inset-bottom)));
+    transform: none;
+    left: 0.7rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .home-hero {
+    min-height: calc(100svh - 56px);
+    align-items: flex-start;
+    padding-top: 4.5rem;
+    padding-bottom: max(9rem, calc(7rem + env(safe-area-inset-bottom)));
+  }
+
+  .home-hero .hero-center-mark {
+    top: 44%;
+    width: min(100% - 2.5rem, 24rem);
+    transform: translate(-50%, -50%);
+  }
+
+  .home-hero .hero-subline {
+    letter-spacing: 0.22em;
+  }
 }
 
 /* ---- Info Strip ---- */
@@ -1290,4 +1314,11 @@ body.scroll-locked .site-logo { opacity: 0; pointer-events: none; }
 body.home-onepager { overflow: hidden; }
 body.home-onepager main { height: 100svh; overflow: hidden; }
 body.home-onepager .site-footer { display: none; }
-.home-hero { min-height: calc(100svh - 56px); }
+.home-hero {
+  min-height: calc(100svh - 56px);
+  padding-bottom: max(7rem, calc(5rem + env(safe-area-inset-bottom)));
+}
+
+.home-hero .hero-center-mark {
+  transform: translate(-50%, -44%);
+}

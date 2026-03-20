@@ -64,7 +64,7 @@ const menuDataJSON = JSON.stringify(
     </div>
   </div>
 
-  <!-- Voice order button -->
+  <!-- Voice order button kept commented out for possible future reintroduction.
   <div id="voice-section" class="voice-section" style="display:none;">
     <div class="container menu-container">
       <button id="voice-btn" class="voice-btn" type="button" aria-label="Ordina a voce">
@@ -79,6 +79,7 @@ const menuDataJSON = JSON.stringify(
       <div id="voice-result" class="voice-result" hidden></div>
     </div>
   </div>
+  -->
 
   <section class="section menu-section-wrap">
     <div class="container menu-container">
@@ -252,7 +253,7 @@ const menuDataJSON = JSON.stringify(
 
 <script>
 const ORDER_API: string | null = (window as any).__ORDER_API || null;
-const WHATSAPP_NUMBER: string = (window as any).__WA_NUMBER || '393487024985';
+const WHATSAPP_NUMBER: string = (window as any).__WA_NUMBER || '393450908133';
 
 interface ItemData { id: string; name: string; price: number; desc: string; ingredients: string[]; }
 const MENU_DATA: Array<{id:string; title:string; items:ItemData[]}> = JSON.parse((window as any).__MENU_DATA || '[]');
@@ -697,6 +698,7 @@ function checkIfOpen() {
 }
 checkIfOpen();
 
+/*
 // ---- Voice Ordering (Web Speech API) ----
 (function initVoice() {
   const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -951,6 +953,7 @@ checkIfOpen();
     else startRecording();
   });
 })();
+*/
 
 // ---- Order Mode Modal ----
 const orderModeOverlay = document.getElementById('order-mode-overlay')!;

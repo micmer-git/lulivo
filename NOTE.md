@@ -34,7 +34,7 @@
 
 ## WhatsApp
 
-- Orders are sent to **+39 348 7024985** via wa.me link
+- Orders are sent to **+39 345 0908133** via wa.me link
 - Formatted message with order details (items, mods, total, delivery info)
 - Backend POST is fire-and-forget (never blocks WhatsApp)
 
