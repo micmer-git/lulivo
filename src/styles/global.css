@@ -330,7 +330,8 @@ body.scroll-locked .site-logo { opacity: 0; pointer-events: none; }
   justify-content: center;
   text-align: center;
   padding-block: 0;
-  background: linear-gradient(135deg, #1a3a08 0%, var(--green-deep) 40%, #3a6a1a 100%);
+  background: linear-gradient(135deg, rgba(26,58,8,0.65) 0%, rgba(45,80,22,0.6) 40%, rgba(58,106,26,0.55) 100%),
+              url('/ulivo_bg.png') center/cover no-repeat;
 }
 .hero-full .container {
   display: flex;
@@ -1311,8 +1312,6 @@ body.scroll-locked .site-logo { opacity: 0; pointer-events: none; }
 }
 
 /* Homepage specific */
-body.home-onepager { overflow: hidden; }
-body.home-onepager main { height: 100svh; overflow: hidden; }
 body.home-onepager .site-footer { display: none; }
 .home-hero {
   min-height: calc(100svh - 56px);
@@ -1321,4 +1320,36 @@ body.home-onepager .site-footer { display: none; }
 
 .home-hero .hero-center-mark {
   transform: translate(-50%, -44%);
+}
+
+/* ---- Instagram Section ---- */
+.instagram-section {
+  background: var(--green-deep);
+  padding: 1.5rem;
+  text-align: center;
+}
+.instagram-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.75rem 1.8rem;
+  background: linear-gradient(135deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);
+  color: var(--white);
+  font-family: var(--font-subline);
+  font-weight: 600;
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+  border-radius: 50px;
+  text-decoration: none;
+  transition: transform 0.2s var(--ease-out), box-shadow 0.2s var(--ease-out);
+}
+.instagram-cta:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(188,24,136,0.35);
+  color: var(--white);
+}
+.instagram-cta svg {
+  width: 1.3rem;
+  height: 1.3rem;
+  fill: currentColor;
 }
