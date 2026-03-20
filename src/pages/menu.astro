@@ -196,8 +196,6 @@ const menuDataJSON = JSON.stringify(
     <div id="mode-pickup-form" class="order-mode-form" style="display:none">
       <label class="order-mode-label">Nome</label>
       <input id="pickup-name" type="text" class="order-mode-input" placeholder="Il tuo nome" />
-      <label class="order-mode-label">Telefono</label>
-      <input id="pickup-phone" type="tel" class="order-mode-input" placeholder="+39 345 1234567" />
       <label class="order-mode-label">Orario ritiro</label>
       <div id="pickup-time-pills" class="delivery-time-pills" role="listbox">
         <div style="font-size:.85rem;color:var(--text-muted)">Caricamento orari...</div>
@@ -208,8 +206,6 @@ const menuDataJSON = JSON.stringify(
     <div id="mode-delivery-form" class="order-mode-form" style="display:none">
       <label class="order-mode-label">Nome</label>
       <input id="delivery-name" type="text" class="order-mode-input" placeholder="Il tuo nome" />
-      <label class="order-mode-label">Telefono</label>
-      <input id="delivery-phone" type="tel" class="order-mode-input" placeholder="+39 345 1234567" />
       <label class="order-mode-label">Indirizzo</label>
       <input id="delivery-address" type="text" class="order-mode-input" placeholder="Via, numero civico, citta" />
       <label class="order-mode-label">Orario consegna</label>
@@ -274,8 +270,7 @@ interface CartEntry {
 let cart: CartEntry[] = [];
 let orderMode: 'pickup' | 'delivery' | null = null;
 let customerName: string = '';
-let customerPhone: string = '';
-let deliveryInfo: { name: string; address: string; time: string; phone: string } | null = null;
+let deliveryInfo: { name: string; address: string; time: string } | null = null;
 let selectedDate: string = '';
 
 function todayISO(): string {
@@ -565,7 +560,6 @@ cartSendBtn.addEventListener('click', async () => {
 
   const globalNotes = (document.getElementById('order-notes-global') as HTMLTextAreaElement)?.value?.trim();
   const name = orderMode === 'delivery' && deliveryInfo ? deliveryInfo.name : customerName;
-  const phone = customerPhone || '';
   const ts = new Date().toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' });
 
   // Build WhatsApp message
@@ -602,7 +596,6 @@ cartSendBtn.addEventListener('click', async () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customerName: name || 'Anonimo',
-          phone,
           orderMode,
           deliveryAddress: deliveryInfo?.address || '',
           requestedTime: orderMode === 'delivery' ? (deliveryInfo?.time || '') : selectedPickupTime,
@@ -623,7 +616,7 @@ cartSendBtn.addEventListener('click', async () => {
 
   // Append tracking link if available
   if (trackingId && ORDER_API) {
-    msg += `\n\n\uD83D\uDCE6 Segui il tuo ordine: ${ORDER_API}/track?id=${trackingId}`;
+    msg += `\n\n\uD83D\uDCE6 *Segui il tuo ordine:*\n${ORDER_API}/track?id=${trackingId}`;
   }
 
   const waUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`;
@@ -995,10 +988,8 @@ const modeDeliveryBtn = document.getElementById('mode-delivery-btn')!;
 const modePickupForm = document.getElementById('mode-pickup-form')!;
 const modeDeliveryForm = document.getElementById('mode-delivery-form')!;
 const pickupNameInput = document.getElementById('pickup-name') as HTMLInputElement;
-const pickupPhoneInput = document.getElementById('pickup-phone') as HTMLInputElement;
 const modePickupConfirm = document.getElementById('mode-pickup-confirm') as HTMLButtonElement;
 const deliveryNameInput = document.getElementById('delivery-name') as HTMLInputElement;
-const deliveryPhoneInput = document.getElementById('delivery-phone') as HTMLInputElement;
 const deliveryAddressInput = document.getElementById('delivery-address') as HTMLInputElement;
 const deliveryTimeInput = document.getElementById('delivery-time') as HTMLInputElement;
 const modeDeliveryConfirm = document.getElementById('mode-delivery-confirm') as HTMLButtonElement;
@@ -1111,7 +1102,6 @@ modePickupConfirm.addEventListener('click', () => {
   if (!pickupNameInput.value.trim() || !selectedPickupTime) return;
   orderMode = 'pickup';
   customerName = pickupNameInput.value.trim();
-  customerPhone = (pickupPhoneInput.value || '').trim().replace(/\s+/g, '');
   finalizePendingEntry();
 });
 
@@ -1124,8 +1114,7 @@ deliveryAddressInput.addEventListener('input', validateDelivery);
 modeDeliveryConfirm.addEventListener('click', () => {
   if (!deliveryNameInput.value.trim() || !deliveryAddressInput.value.trim() || !selectedDeliveryTime) return;
   orderMode = 'delivery';
-  deliveryInfo = { name: deliveryNameInput.value.trim(), address: deliveryAddressInput.value.trim(), time: selectedDeliveryTime, phone: (deliveryPhoneInput.value || '').trim().replace(/\s+/g, '') };
-  customerPhone = deliveryInfo.phone;
+  deliveryInfo = { name: deliveryNameInput.value.trim(), address: deliveryAddressInput.value.trim(), time: selectedDeliveryTime };
   finalizePendingEntry();
 });
 

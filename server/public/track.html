@@ -105,8 +105,6 @@
     <h2>Cerca il tuo ordine</h2>
     <label for="trackCode">Codice ordine</label>
     <input type="text" id="trackCode" class="code-input" placeholder="ULV-XXXX" maxlength="8" />
-    <label for="trackPhone">Numero di telefono</label>
-    <input type="tel" id="trackPhone" placeholder="+39 345 0908133" />
     <button id="searchBtn" class="search-btn" onclick="doSearch()">Cerca</button>
     <div id="searchError" class="search-error"></div>
   </div>
@@ -143,7 +141,6 @@
 
 <script>
 let currentTrackingId = '';
-let currentPhone = '';
 let refreshTimer = null;
 
 function esc(s) {
@@ -165,23 +162,23 @@ function fmtMsgTime(iso) {
   return new Date(iso).toLocaleString('it-IT', { hour:'2-digit', minute:'2-digit', day:'2-digit', month:'short' });
 }
 
-// Read URL params
+// Read URL params — auto-load order if id is present
 (function() {
   const params = new URLSearchParams(window.location.search);
   const id = params.get('id');
   if (id) {
     document.getElementById('trackCode').value = id.toUpperCase();
+    setTimeout(doSearch, 100);
   }
 })();
 
 async function doSearch() {
   const code = document.getElementById('trackCode').value.trim().toUpperCase();
-  const phone = document.getElementById('trackPhone').value.trim().replace(/\s+/g, '');
   const errorEl = document.getElementById('searchError');
   errorEl.style.display = 'none';
 
-  if (!code || !phone) {
-    errorEl.textContent = 'Inserisci codice ordine e numero di telefono';
+  if (!code) {
+    errorEl.textContent = 'Inserisci il codice ordine';
     errorEl.style.display = 'block';
     return;
   }
@@ -191,7 +188,7 @@ async function doSearch() {
   btn.textContent = 'Ricerca...';
 
   try {
-    const r = await fetch('/api/track/' + encodeURIComponent(code) + '?phone=' + encodeURIComponent(phone));
+    const r = await fetch('/api/track/' + encodeURIComponent(code));
     const data = await r.json();
     if (!r.ok) {
       errorEl.textContent = data.error || 'Ordine non trovato';
@@ -202,7 +199,6 @@ async function doSearch() {
     }
 
     currentTrackingId = code;
-    currentPhone = phone;
     renderOrder(data);
     document.getElementById('searchSection').style.display = 'none';
     document.getElementById('orderView').style.display = 'block';
@@ -279,9 +275,9 @@ function renderMessages(msgs) {
 }
 
 async function refreshOrder() {
-  if (!currentTrackingId || !currentPhone) return;
+  if (!currentTrackingId) return;
   try {
-    var r = await fetch('/api/track/' + encodeURIComponent(currentTrackingId) + '?phone=' + encodeURIComponent(currentPhone));
+    var r = await fetch('/api/track/' + encodeURIComponent(currentTrackingId));
     if (r.ok) {
       var data = await r.json();
       renderOrder(data);
@@ -292,7 +288,7 @@ async function refreshOrder() {
 async function sendMessage() {
   var input = document.getElementById('msgInput');
   var text = input.value.trim();
-  if (!text || !currentTrackingId || !currentPhone) return;
+  if (!text || !currentTrackingId) return;
 
   var btn = document.getElementById('msgSendBtn');
   btn.disabled = true;
@@ -301,7 +297,7 @@ async function sendMessage() {
     var r = await fetch('/api/track/' + encodeURIComponent(currentTrackingId) + '/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone: currentPhone, text: text }),
+      body: JSON.stringify({ text: text }),
     });
     if (r.ok) {
       input.value = '';
@@ -315,14 +311,12 @@ async function sendMessage() {
 function goBack() {
   if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
   currentTrackingId = '';
-  currentPhone = '';
   document.getElementById('orderView').style.display = 'none';
   document.getElementById('searchSection').style.display = 'block';
 }
 
 // Enter key on inputs
 document.getElementById('trackCode').addEventListener('keydown', function(e) { if (e.key === 'Enter') doSearch(); });
-document.getElementById('trackPhone').addEventListener('keydown', function(e) { if (e.key === 'Enter') doSearch(); });
 document.getElementById('msgInput').addEventListener('keydown', function(e) { if (e.key === 'Enter') sendMessage(); });
 </script>
 </body>
