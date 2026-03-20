@@ -1151,9 +1151,16 @@ body.scroll-locked .site-logo { opacity: 0; pointer-events: none; }
 }
 .footer-inner {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: 1fr;
   gap: 2rem;
   margin-bottom: 2rem;
+  text-align: center;
+}
+@media (min-width: 640px) {
+  .footer-inner {
+    grid-template-columns: 1.2fr 1fr 1fr;
+    text-align: left;
+  }
 }
 .footer-brand {
   font-family: var(--font-script);
@@ -1325,31 +1332,31 @@ body.home-onepager .site-footer { display: none; }
 /* ---- Instagram Section ---- */
 .instagram-section {
   background: var(--green-deep);
-  padding: 1.5rem;
+  padding: 1.2rem;
   text-align: center;
 }
 .instagram-cta {
   display: inline-flex;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.75rem 1.8rem;
-  background: linear-gradient(135deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);
-  color: var(--white);
+  gap: 0.5rem;
+  padding: 0.5rem 1.4rem;
+  background: transparent;
+  border: 1.5px solid var(--accent-gold-light);
+  color: var(--accent-gold-light);
   font-family: var(--font-subline);
   font-weight: 600;
-  font-size: 0.95rem;
-  letter-spacing: 0.04em;
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
   border-radius: 50px;
   text-decoration: none;
-  transition: transform 0.2s var(--ease-out), box-shadow 0.2s var(--ease-out);
+  transition: background 0.2s var(--ease-out), color 0.2s var(--ease-out);
 }
 .instagram-cta:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(188,24,136,0.35);
-  color: var(--white);
+  background: var(--accent-gold-light);
+  color: var(--green-deep);
 }
 .instagram-cta svg {
-  width: 1.3rem;
-  height: 1.3rem;
+  width: 1.1rem;
+  height: 1.1rem;
   fill: currentColor;
 }
