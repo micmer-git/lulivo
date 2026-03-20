@@ -109,6 +109,12 @@
     <div id="searchError" class="search-error"></div>
   </div>
 
+  <!-- Recent orders from localStorage -->
+  <div id="recentOrders" style="display:none;background:var(--white);border:2px solid var(--green-deep);box-shadow:4px 4px 0 var(--green-deep);padding:1.25rem;margin-bottom:1.25rem">
+    <h2 style="font-family:var(--display);font-size:1rem;color:var(--green-deep);text-transform:uppercase;letter-spacing:1px;margin-bottom:.75rem">I tuoi ordini recenti</h2>
+    <div id="recentOrdersList"></div>
+  </div>
+
   <!-- Order view -->
   <div id="orderView" class="order-view">
     <button class="btn-back" onclick="goBack()">&larr; Nuova ricerca</button>
@@ -318,6 +324,27 @@ function goBack() {
 // Enter key on inputs
 document.getElementById('trackCode').addEventListener('keydown', function(e) { if (e.key === 'Enter') doSearch(); });
 document.getElementById('msgInput').addEventListener('keydown', function(e) { if (e.key === 'Enter') sendMessage(); });
+
+// Recent orders from localStorage
+(function renderRecentOrders() {
+  try {
+    var orders = JSON.parse(localStorage.getItem('myOrders') || '[]');
+    if (!orders.length) return;
+    var container = document.getElementById('recentOrdersList');
+    container.innerHTML = orders.map(function(o) {
+      var d = new Date(o.date);
+      var dateStr = d.toLocaleDateString('it-IT', { day:'2-digit', month:'short', year:'numeric' });
+      var timeStr = d.toLocaleTimeString('it-IT', { hour:'2-digit', minute:'2-digit' });
+      var totalStr = Number(o.total || 0).toFixed(2).replace('.', ',');
+      return '<div onclick="document.getElementById(\'trackCode\').value=\'' + esc(o.trackingId) + '\';doSearch();" style="display:flex;justify-content:space-between;align-items:center;padding:.6rem .75rem;border-bottom:1px solid var(--slate);cursor:pointer;transition:background .15s"'
+        + ' onmouseover="this.style.background=\'var(--green-xlight)\'" onmouseout="this.style.background=\'transparent\'">'
+        + '<div><strong style="font-family:var(--display);color:var(--green-deep);letter-spacing:1px">' + esc(o.trackingId) + '</strong>'
+        + '<div style="font-size:.78rem;color:var(--muted)">' + dateStr + ' ' + timeStr + '</div></div>'
+        + '<div style="font-weight:700;white-space:nowrap">\u20AC ' + totalStr + '</div></div>';
+    }).join('');
+    document.getElementById('recentOrders').style.display = 'block';
+  } catch(e) {}
+})();
 </script>
 </body>
 </html>
