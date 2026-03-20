@@ -167,7 +167,7 @@ const menuDataJSON = JSON.stringify(
   </div>
 
   <!-- Closed banner (hidden by default) -->
-  <div id="closed-banner" style="display:none;background:var(--red);color:white;text-align:center;padding:1rem;font-weight:700;position:fixed;top:56px;left:0;right:0;z-index:200;">
+  <div id="closed-banner" style="display:none;background:var(--red);color:white;text-align:center;padding:0.75rem 1rem;font-weight:700;font-size:0.85rem;position:sticky;top:56px;left:0;right:0;z-index:calc(var(--z-sticky) + 1);">
     <span id="closed-msg"></span>
   </div>
 
