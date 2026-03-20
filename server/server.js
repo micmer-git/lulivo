@@ -74,6 +74,14 @@ function estimateItemCost(item) {
 // --- Storage ---
 let db = null;
 const ORDERS_FILE = path.join(__dirname, 'orders.json');
+const MESSAGES_FILE = path.join(__dirname, 'messages.json');
+
+function generateTrackingId() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no I/O/0/1 for clarity
+  let code = '';
+  for (let i = 0; i < 4; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  return 'ULV-' + code;
+}
 
 async function initDB() {
   if (process.env.TURSO_URL) {
@@ -90,9 +98,21 @@ async function initDB() {
       notes TEXT,
       status TEXT DEFAULT 'pending'
     )`);
+    // Migrate: add tracking_id and phone columns
+    try { await db.execute(`ALTER TABLE orders ADD COLUMN tracking_id TEXT UNIQUE`); } catch {}
+    try { await db.execute(`ALTER TABLE orders ADD COLUMN phone TEXT DEFAULT ''`); } catch {}
+    // Messages table
+    await db.execute(`CREATE TABLE IF NOT EXISTS messages (
+      id TEXT PRIMARY KEY,
+      order_id TEXT NOT NULL,
+      sender TEXT NOT NULL,
+      text TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )`);
     console.log('[DB] Turso connected');
   } else {
     if (!fs.existsSync(ORDERS_FILE)) fs.writeFileSync(ORDERS_FILE, '[]');
+    if (!fs.existsSync(MESSAGES_FILE)) fs.writeFileSync(MESSAGES_FILE, '[]');
     console.log('[DB] Using local JSON fallback');
   }
 }
@@ -107,12 +127,14 @@ function writeLocalOrders(orders) {
 async function addOrder(order) {
   const id = crypto.randomUUID();
   const timestamp = new Date().toISOString();
-  const record = { id, timestamp, ...order, status: 'pending' };
+  const tracking_id = generateTrackingId();
+  const phone = (order.phone || '').replace(/\s+/g, '');
+  const record = { id, timestamp, tracking_id, phone, ...order, status: 'pending' };
   if (db) {
     await db.execute({
-      sql: `INSERT INTO orders (id, timestamp, customer_name, order_mode, delivery_address, items, total_price, notes)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      args: [id, timestamp, order.customerName, order.orderMode, order.deliveryAddress || '',
+      sql: `INSERT INTO orders (id, timestamp, tracking_id, phone, customer_name, order_mode, delivery_address, items, total_price, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [id, timestamp, tracking_id, phone, order.customerName, order.orderMode, order.deliveryAddress || '',
              JSON.stringify(order.items), order.totalPrice, order.notes || '']
     });
   } else {
@@ -133,9 +155,97 @@ async function getOrders() {
       customerName: r.customer_name,
       orderMode: r.order_mode,
       deliveryAddress: r.delivery_address,
+      tracking_id: r.tracking_id || '',
+      phone: r.phone || '',
     }));
   }
   return readLocalOrders();
+}
+
+// --- Messages ---
+function readLocalMessages() {
+  try { return JSON.parse(fs.readFileSync(MESSAGES_FILE, 'utf-8')); } catch { return []; }
+}
+function writeLocalMessages(msgs) {
+  fs.writeFileSync(MESSAGES_FILE, JSON.stringify(msgs, null, 2));
+}
+
+async function getMessagesForOrder(trackingId) {
+  if (db) {
+    const rs = await db.execute({ sql: 'SELECT * FROM messages WHERE order_id = ? ORDER BY created_at ASC', args: [trackingId] });
+    return rs.rows;
+  }
+  return readLocalMessages().filter(m => m.order_id === trackingId);
+}
+
+async function addMessage(trackingId, sender, text) {
+  const id = crypto.randomUUID();
+  const created_at = new Date().toISOString();
+  const msg = { id, order_id: trackingId, sender, text, created_at };
+  if (db) {
+    await db.execute({
+      sql: 'INSERT INTO messages (id, order_id, sender, text, created_at) VALUES (?, ?, ?, ?, ?)',
+      args: [id, trackingId, sender, text, created_at],
+    });
+  } else {
+    const msgs = readLocalMessages();
+    msgs.push(msg);
+    writeLocalMessages(msgs);
+  }
+  return msg;
+}
+
+async function getMessageCountsForOrders() {
+  if (db) {
+    const rs = await db.execute('SELECT order_id, COUNT(*) as cnt FROM messages GROUP BY order_id');
+    const map = {};
+    rs.rows.forEach(r => { map[r.order_id] = r.cnt; });
+    return map;
+  }
+  const msgs = readLocalMessages();
+  const map = {};
+  msgs.forEach(m => { map[m.order_id] = (map[m.order_id] || 0) + 1; });
+  return map;
+}
+
+async function findOrderByTrackingId(trackingId) {
+  if (db) {
+    const rs = await db.execute({ sql: 'SELECT * FROM orders WHERE tracking_id = ?', args: [trackingId] });
+    if (!rs.rows.length) return null;
+    const r = rs.rows[0];
+    return {
+      ...r,
+      items: JSON.parse(r.items),
+      totalPrice: r.total_price,
+      customerName: r.customer_name,
+      orderMode: r.order_mode,
+      deliveryAddress: r.delivery_address,
+      tracking_id: r.tracking_id || '',
+      phone: r.phone || '',
+    };
+  }
+  const orders = readLocalOrders();
+  return orders.find(o => o.tracking_id === trackingId) || null;
+}
+
+async function findOrderById(id) {
+  if (db) {
+    const rs = await db.execute({ sql: 'SELECT * FROM orders WHERE id = ?', args: [id] });
+    if (!rs.rows.length) return null;
+    const r = rs.rows[0];
+    return {
+      ...r,
+      items: JSON.parse(r.items),
+      totalPrice: r.total_price,
+      customerName: r.customer_name,
+      orderMode: r.order_mode,
+      deliveryAddress: r.delivery_address,
+      tracking_id: r.tracking_id || '',
+      phone: r.phone || '',
+    };
+  }
+  const orders = readLocalOrders();
+  return orders.find(o => o.id === id) || null;
 }
 
 async function updateOrderStatus(id, status) {
@@ -348,7 +458,58 @@ const server = http.createServer(async (req, res) => {
     const body = await parseBody(req);
     if (!body.customerName || !body.items?.length) return json(res, { error: 'Missing data' }, 400);
     const order = await addOrder(body);
-    return json(res, order, 201);
+    return json(res, { ...order, tracking_id: order.tracking_id }, 201);
+  }
+
+  // --- Public API: Customer tracking ---
+  const trackMatch = pathname.match(/^\/api\/track\/([A-Z0-9-]+)$/);
+  if (trackMatch && req.method === 'GET') {
+    const trackingId = trackMatch[1];
+    const phone = (url.searchParams.get('phone') || '').replace(/\s+/g, '');
+    const order = await findOrderByTrackingId(trackingId);
+    if (!order) return json(res, { error: 'Ordine non trovato' }, 404);
+    if (!phone || order.phone !== phone) return json(res, { error: 'Numero di telefono non corrispondente' }, 403);
+    const messages = await getMessagesForOrder(trackingId);
+    return json(res, {
+      tracking_id: order.tracking_id,
+      status: order.status,
+      customerName: order.customerName,
+      orderMode: order.orderMode,
+      deliveryAddress: order.deliveryAddress,
+      items: order.items,
+      totalPrice: order.totalPrice,
+      timestamp: order.timestamp,
+      requestedTime: order.requestedTime,
+      requestedDate: order.requestedDate,
+      notes: order.notes,
+      messages,
+    });
+  }
+
+  const trackMsgMatch = pathname.match(/^\/api\/track\/([A-Z0-9-]+)\/messages$/);
+  if (trackMsgMatch && req.method === 'POST') {
+    const trackingId = trackMsgMatch[1];
+    const body = await parseBody(req);
+    const phone = (body.phone || '').replace(/\s+/g, '');
+    if (!body.text?.trim()) return json(res, { error: 'Testo mancante' }, 400);
+    const order = await findOrderByTrackingId(trackingId);
+    if (!order) return json(res, { error: 'Ordine non trovato' }, 404);
+    if (!phone || order.phone !== phone) return json(res, { error: 'Numero di telefono non corrispondente' }, 403);
+    const msg = await addMessage(trackingId, 'customer', body.text.trim());
+    return json(res, msg, 201);
+  }
+
+  if (pathname === '/api/customer-orders' && req.method === 'GET') {
+    const phone = (url.searchParams.get('phone') || '').replace(/\s+/g, '');
+    if (!phone) return json(res, { error: 'Telefono mancante' }, 400);
+    const allOrd = await getOrders();
+    const matching = allOrd.filter(o => o.phone === phone).map(o => ({
+      tracking_id: o.tracking_id,
+      status: o.status,
+      totalPrice: o.totalPrice,
+      timestamp: o.timestamp,
+    }));
+    return json(res, matching);
   }
 
   // --- Admin auth ---
@@ -413,6 +574,34 @@ const server = http.createServer(async (req, res) => {
     return json(res, calendar);
   }
 
+  // Admin message endpoints (must be before generic /api/orders/:id PUT/DELETE)
+  const adminMsgMatch = pathname.match(/^\/api\/orders\/([^/]+)\/messages$/);
+  if (adminMsgMatch) {
+    if (!checkAuth(req)) return json(res, { error: 'Non autorizzato' }, 401);
+    const orderId = adminMsgMatch[1];
+    const order = await findOrderById(orderId);
+    if (!order) return json(res, { error: 'Ordine non trovato' }, 404);
+    const trackingId = order.tracking_id;
+
+    if (req.method === 'GET') {
+      const messages = await getMessagesForOrder(trackingId);
+      return json(res, messages);
+    }
+    if (req.method === 'POST') {
+      const body = await parseBody(req);
+      if (!body.text?.trim()) return json(res, { error: 'Testo mancante' }, 400);
+      const msg = await addMessage(trackingId, 'pizzeria', body.text.trim());
+      return json(res, msg, 201);
+    }
+  }
+
+  // Admin: get message counts for all orders
+  if (pathname === '/api/messages/counts' && req.method === 'GET') {
+    if (!checkAuth(req)) return json(res, { error: 'Non autorizzato' }, 401);
+    const counts = await getMessageCountsForOrders();
+    return json(res, counts);
+  }
+
   if (pathname.startsWith('/api/orders/') && req.method === 'PUT') {
     if (!checkAuth(req)) return json(res, { error: 'Non autorizzato' }, 401);
     const id = pathname.split('/').pop();
@@ -431,6 +620,11 @@ const server = http.createServer(async (req, res) => {
   // --- Admin page ---
   if (pathname === '/ordini' || pathname === '/ordini/') {
     return serveFile(res, path.join(__dirname, 'public', 'ordini.html'), 'text/html');
+  }
+
+  // --- Customer tracking page ---
+  if (pathname === '/track' || pathname.startsWith('/track/')) {
+    return serveFile(res, path.join(__dirname, 'public', 'track.html'), 'text/html');
   }
 
   json(res, { error: 'Not found' }, 404);
