@@ -465,10 +465,8 @@ const server = http.createServer(async (req, res) => {
   const trackMatch = pathname.match(/^\/api\/track\/([A-Z0-9-]+)$/);
   if (trackMatch && req.method === 'GET') {
     const trackingId = trackMatch[1];
-    const phone = (url.searchParams.get('phone') || '').replace(/\s+/g, '');
     const order = await findOrderByTrackingId(trackingId);
     if (!order) return json(res, { error: 'Ordine non trovato' }, 404);
-    if (!phone || order.phone !== phone) return json(res, { error: 'Numero di telefono non corrispondente' }, 403);
     const messages = await getMessagesForOrder(trackingId);
     return json(res, {
       tracking_id: order.tracking_id,
@@ -490,26 +488,11 @@ const server = http.createServer(async (req, res) => {
   if (trackMsgMatch && req.method === 'POST') {
     const trackingId = trackMsgMatch[1];
     const body = await parseBody(req);
-    const phone = (body.phone || '').replace(/\s+/g, '');
     if (!body.text?.trim()) return json(res, { error: 'Testo mancante' }, 400);
     const order = await findOrderByTrackingId(trackingId);
     if (!order) return json(res, { error: 'Ordine non trovato' }, 404);
-    if (!phone || order.phone !== phone) return json(res, { error: 'Numero di telefono non corrispondente' }, 403);
     const msg = await addMessage(trackingId, 'customer', body.text.trim());
     return json(res, msg, 201);
-  }
-
-  if (pathname === '/api/customer-orders' && req.method === 'GET') {
-    const phone = (url.searchParams.get('phone') || '').replace(/\s+/g, '');
-    if (!phone) return json(res, { error: 'Telefono mancante' }, 400);
-    const allOrd = await getOrders();
-    const matching = allOrd.filter(o => o.phone === phone).map(o => ({
-      tracking_id: o.tracking_id,
-      status: o.status,
-      totalPrice: o.totalPrice,
-      timestamp: o.timestamp,
-    }));
-    return json(res, matching);
   }
 
   // --- Admin auth ---
