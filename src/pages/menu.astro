@@ -288,6 +288,17 @@ allTabs.forEach(tab => {
     tab.classList.add('active');
     tab.setAttribute('aria-selected', 'true');
     allPanels.forEach(p => p.classList.toggle('active', p.dataset.section === tab.dataset.section));
+
+    // Scroll section title into view below sticky header/tabs/search
+    const activePanel = document.querySelector('.menu-panel.active') as HTMLElement;
+    if (activePanel) {
+      const title = activePanel.querySelector('.menu-section-title') as HTMLElement;
+      if (title) {
+        const stickyOffset = 56 + 51 + 52 + 10; // header + tabs + search + gap
+        const y = title.getBoundingClientRect().top + window.scrollY - stickyOffset;
+        window.scrollTo({ top: y, behavior: 'smooth' });
+      }
+    }
   });
 });
 
