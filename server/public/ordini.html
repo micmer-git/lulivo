@@ -60,6 +60,20 @@
     .orders-list{display:flex;flex-direction:column;gap:1rem}
     .order-card{background:var(--white);border:2px solid var(--green-deep);box-shadow:4px 4px 0 var(--green-deep);padding:1rem 1.25rem}
     .order-card.completed{opacity:.65;border-color:var(--muted);box-shadow:4px 4px 0 var(--muted)}
+    .order-card.approved{border-color:var(--green-mid);box-shadow:4px 4px 0 var(--green-mid)}
+    .order-card.rejected{opacity:.5;border-color:var(--red);box-shadow:4px 4px 0 var(--red)}
+    .btn-approve{border-color:var(--green-mid);color:var(--green-mid)}.btn-approve:hover{background:var(--green-xlight)}
+    .btn-reject{border-color:var(--red);color:var(--red)}.btn-reject:hover{background:#fde8e8}
+    .est-minutes-row{display:flex;align-items:center;gap:.4rem;margin-top:.4rem;font-size:.78rem}
+    .est-minutes-input{width:3.5rem;padding:.2rem .4rem;border:2px solid var(--slate);font-size:.82rem;font-family:var(--font);text-align:center;outline:none}
+    .est-minutes-input:focus{border-color:var(--green-mid)}
+    .est-minutes-btn{padding:.2rem .5rem;background:var(--green-deep);color:var(--white);border:none;font-size:.72rem;font-weight:700;cursor:pointer;font-family:var(--font);text-transform:uppercase;letter-spacing:.3px}
+    .est-minutes-btn:hover{background:var(--green-mid)}
+    .status-label{font-size:.7rem;font-weight:700;padding:.15rem .5rem;text-transform:uppercase;letter-spacing:.5px;border:2px solid}
+    .status-label.pending{color:var(--gold);border-color:var(--gold);background:#fef9e7}
+    .status-label.approved{color:var(--green-mid);border-color:var(--green-mid);background:var(--green-xlight)}
+    .status-label.rejected{color:var(--red);border-color:var(--red);background:#fde8e8}
+    .status-label.completed{color:var(--muted);border-color:var(--muted);background:var(--slate)}
     .order-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.6rem;flex-wrap:wrap;gap:.4rem}
     .order-customer{font-family:var(--display);font-size:1.15rem;font-weight:700;color:var(--green-deep);text-transform:uppercase;letter-spacing:.5px}
     .order-mode{font-size:.75rem;font-weight:700;padding:.2rem .6rem;text-transform:uppercase;letter-spacing:.5px;border:2px solid}
@@ -213,6 +227,8 @@
     <div class="filters">
       <button class="filter-btn active" data-filter="all" onclick="setFilter('all')">Tutti</button>
       <button class="filter-btn" data-filter="pending" onclick="setFilter('pending')">In attesa</button>
+      <button class="filter-btn" data-filter="approved" onclick="setFilter('approved')">Approvati</button>
+      <button class="filter-btn" data-filter="rejected" onclick="setFilter('rejected')">Rifiutati</button>
       <button class="filter-btn" data-filter="completed" onclick="setFilter('completed')">Completati</button>
     </div>
 
@@ -396,13 +412,14 @@ function renderOrders() {
   const container = document.getElementById('ordersList');
   let orders = [...allOrders];
 
-  if (currentFilter === 'pending') orders = orders.filter(o => o.status !== 'completed');
-  else if (currentFilter === 'completed') orders = orders.filter(o => o.status === 'completed');
+  if (currentFilter !== 'all') orders = orders.filter(o => (o.status || 'pending') === currentFilter);
 
-  // Sort: pending first, then by date desc
+  // Sort: pending first, approved, then rejected/completed last
+  var statusOrder = { pending: 0, approved: 1, rejected: 2, completed: 3 };
   orders.sort((a, b) => {
-    if (a.status === 'completed' && b.status !== 'completed') return 1;
-    if (a.status !== 'completed' && b.status === 'completed') return -1;
+    var sa = statusOrder[a.status || 'pending'] ?? 1;
+    var sb = statusOrder[b.status || 'pending'] ?? 1;
+    if (sa !== sb) return sa - sb;
     return new Date(b.createdAt || b.date || 0) - new Date(a.createdAt || a.date || 0);
   });
 
@@ -414,8 +431,14 @@ function renderOrders() {
   container.innerHTML = orders.map(o => renderOrderCard(o)).join('');
 }
 
+function statusLabel(status) {
+  const map = { pending: 'In attesa', approved: 'Approvato', rejected: 'Rifiutato', completed: 'Completato' };
+  return map[status] || status;
+}
+
 function renderOrderCard(o) {
-  const isCompleted = o.status === 'completed';
+  const status = o.status || 'pending';
+  const isCompleted = status === 'completed';
   const mode = (o.orderMode || 'pickup').toLowerCase();
   const modeLabel = mode === 'delivery' ? '\uD83D\uDE97 Consegna' : '\uD83C\uDFE0 Asporto';
   const modeClass = mode === 'delivery' ? 'consegna' : 'asporto';
@@ -448,11 +471,31 @@ function renderOrderCard(o) {
     notesHtml = '<div class="order-notes">\uD83D\uDCDD ' + esc(o.notes) + '</div>';
   }
 
-  const actionBtns = isCompleted
-    ? '<button class="btn-action btn-reopen" onclick="updateOrder(\'' + esc(o.id) + '\',\'pending\')">\u21A9 Riapri</button>'
-      + '<button class="btn-action btn-delete" onclick="deleteOrder(\'' + esc(o.id) + '\')">\uD83D\uDDD1 Elimina</button>'
-    : '<button class="btn-action btn-complete" onclick="updateOrder(\'' + esc(o.id) + '\',\'completed\')">\u2705 Completato</button>'
-      + '<button class="btn-action btn-delete" onclick="deleteOrder(\'' + esc(o.id) + '\')">\uD83D\uDDD1 Elimina</button>';
+  let actionBtns = '';
+  if (status === 'pending') {
+    actionBtns = '<button class="btn-action btn-approve" onclick="updateOrder(\'' + esc(o.id) + '\',\'approved\')">&#9989; Approva</button>'
+      + '<button class="btn-action btn-reject" onclick="updateOrder(\'' + esc(o.id) + '\',\'rejected\')">&#10060; Rifiuta</button>'
+      + '<button class="btn-action btn-delete" onclick="deleteOrder(\'' + esc(o.id) + '\')">\uD83D\uDDD1</button>';
+  } else if (status === 'approved') {
+    actionBtns = '<button class="btn-action btn-complete" onclick="updateOrder(\'' + esc(o.id) + '\',\'completed\')">&#9989; Completato</button>'
+      + '<button class="btn-action btn-reject" onclick="updateOrder(\'' + esc(o.id) + '\',\'rejected\')">&#10060; Rifiuta</button>'
+      + '<button class="btn-action btn-delete" onclick="deleteOrder(\'' + esc(o.id) + '\')">\uD83D\uDDD1</button>';
+  } else if (status === 'rejected') {
+    actionBtns = '<button class="btn-action btn-reopen" onclick="updateOrder(\'' + esc(o.id) + '\',\'pending\')">\u21A9 Riapri</button>'
+      + '<button class="btn-action btn-delete" onclick="deleteOrder(\'' + esc(o.id) + '\')">\uD83D\uDDD1</button>';
+  } else {
+    actionBtns = '<button class="btn-action btn-reopen" onclick="updateOrder(\'' + esc(o.id) + '\',\'pending\')">\u21A9 Riapri</button>'
+      + '<button class="btn-action btn-delete" onclick="deleteOrder(\'' + esc(o.id) + '\')">\uD83D\uDDD1</button>';
+  }
+
+  const estMin = o.estimatedMinutes != null ? o.estimatedMinutes : '';
+  const estMinutesHtml = (status === 'pending' || status === 'approved')
+    ? '<div class="est-minutes-row">'
+      + '<span>Tempo stimato:</span>'
+      + '<input type="number" class="est-minutes-input" id="est-min-' + esc(o.id) + '" value="' + esc(estMin) + '" min="1" max="180" placeholder="min" />'
+      + '<button class="est-minutes-btn" onclick="setEstimatedMinutes(\'' + esc(o.id) + '\')">Salva</button>'
+      + '</div>'
+    : '';
 
   const trackId = o.tracking_id || '';
   const msgCount = messageCounts[trackId] || 0;
@@ -462,11 +505,12 @@ function renderOrderCard(o) {
 
   const msgToggleBtn = '<button class="btn-action btn-toggle-msgs" onclick="toggleMessages(\'' + esc(o.id) + '\',\'' + esc(trackId) + '\',this)">&#128172;' + (msgCount > 0 ? ' ' + msgCount : '') + '</button>';
 
-  return '<div class="order-card' + (isCompleted ? ' completed' : '') + '" id="order-' + esc(o.id) + '">'
+  return '<div class="order-card ' + esc(status) + '" id="order-' + esc(o.id) + '">'
     + '<div class="order-header">'
     + '<span class="order-customer">' + esc(o.customerName || 'Anonimo') + msgBadgeHtml
     + (trackId ? '<span class="order-tracking-id">' + esc(trackId) + '</span>' : '') + '</span>'
     + '<span class="order-mode ' + modeClass + '">' + modeLabel + '</span>'
+    + '<span class="status-label ' + esc(status) + '">' + esc(statusLabel(status)) + '</span>'
     + '</div>'
     + '<div class="order-meta">' + esc(timeStr)
     + (o.requestedDate ? ' &middot; <strong>Per: ' + esc(o.requestedDate) + '</strong>' : '')
@@ -476,6 +520,7 @@ function renderOrderCard(o) {
     + addressHtml
     + '<div class="order-items">' + itemsHtml + '</div>'
     + notesHtml
+    + estMinutesHtml
     + '<div class="order-footer">'
     + '<div class="order-total">\u20AC ' + esc(fmt(o.totalPrice || 0)) + '</div>'
     + '<div class="order-actions">' + msgToggleBtn + actionBtns + '</div>'
@@ -502,6 +547,22 @@ async function updateOrder(id, status) {
 async function deleteOrder(id) {
   if (!confirm('Eliminare questo ordine?')) return;
   await api('/api/orders/' + encodeURIComponent(id), { method: 'DELETE' });
+  loadOrders();
+}
+
+async function setEstimatedMinutes(id) {
+  var input = document.getElementById('est-min-' + id);
+  if (!input) return;
+  var val = input.value.trim();
+  var minutes = val ? parseInt(val) : null;
+  // Also approve if still pending
+  var order = allOrders.find(function(o) { return o.id === id; });
+  var newStatus = order && order.status === 'pending' ? 'approved' : (order ? order.status : 'approved');
+  await api('/api/orders/' + encodeURIComponent(id), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status: newStatus, estimatedMinutes: minutes })
+  });
   loadOrders();
 }
 

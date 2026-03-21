@@ -98,9 +98,10 @@ async function initDB() {
       notes TEXT,
       status TEXT DEFAULT 'pending'
     )`);
-    // Migrate: add tracking_id and phone columns
+    // Migrate: add tracking_id, phone, estimated_minutes columns
     try { await db.execute(`ALTER TABLE orders ADD COLUMN tracking_id TEXT`); console.log('[MIGRATE] Added tracking_id column'); } catch (e) { console.log('[MIGRATE] tracking_id:', e.message); }
     try { await db.execute(`ALTER TABLE orders ADD COLUMN phone TEXT DEFAULT ''`); console.log('[MIGRATE] Added phone column'); } catch (e) { console.log('[MIGRATE] phone:', e.message); }
+    try { await db.execute(`ALTER TABLE orders ADD COLUMN estimated_minutes INTEGER`); console.log('[MIGRATE] Added estimated_minutes column'); } catch (e) { console.log('[MIGRATE] estimated_minutes:', e.message); }
     try { await db.execute(`CREATE UNIQUE INDEX IF NOT EXISTS idx_tracking_id ON orders(tracking_id)`); } catch {}
     // Messages table
     await db.execute(`CREATE TABLE IF NOT EXISTS messages (
@@ -130,7 +131,7 @@ async function addOrder(order) {
   const timestamp = new Date().toISOString();
   const tracking_id = generateTrackingId();
   const phone = (order.phone || '').replace(/\s+/g, '');
-  const record = { id, timestamp, tracking_id, phone, ...order, status: 'pending' };
+  const record = { id, timestamp, tracking_id, phone, ...order, status: 'pending', estimatedMinutes: null };
   if (db) {
     await db.execute({
       sql: `INSERT INTO orders (id, timestamp, tracking_id, phone, customer_name, order_mode, delivery_address, items, total_price, notes)
@@ -158,6 +159,7 @@ async function getOrders() {
       deliveryAddress: r.delivery_address,
       tracking_id: r.tracking_id || '',
       phone: r.phone || '',
+      estimatedMinutes: r.estimated_minutes ?? null,
     }));
   }
   return readLocalOrders();
@@ -209,21 +211,25 @@ async function getMessageCountsForOrders() {
   return map;
 }
 
+function mapRow(r) {
+  return {
+    ...r,
+    items: JSON.parse(r.items),
+    totalPrice: r.total_price,
+    customerName: r.customer_name,
+    orderMode: r.order_mode,
+    deliveryAddress: r.delivery_address,
+    tracking_id: r.tracking_id || '',
+    phone: r.phone || '',
+    estimatedMinutes: r.estimated_minutes ?? null,
+  };
+}
+
 async function findOrderByTrackingId(trackingId) {
   if (db) {
     const rs = await db.execute({ sql: 'SELECT * FROM orders WHERE tracking_id = ?', args: [trackingId] });
     if (!rs.rows.length) return null;
-    const r = rs.rows[0];
-    return {
-      ...r,
-      items: JSON.parse(r.items),
-      totalPrice: r.total_price,
-      customerName: r.customer_name,
-      orderMode: r.order_mode,
-      deliveryAddress: r.delivery_address,
-      tracking_id: r.tracking_id || '',
-      phone: r.phone || '',
-    };
+    return mapRow(rs.rows[0]);
   }
   const orders = readLocalOrders();
   return orders.find(o => o.tracking_id === trackingId) || null;
@@ -233,29 +239,27 @@ async function findOrderById(id) {
   if (db) {
     const rs = await db.execute({ sql: 'SELECT * FROM orders WHERE id = ?', args: [id] });
     if (!rs.rows.length) return null;
-    const r = rs.rows[0];
-    return {
-      ...r,
-      items: JSON.parse(r.items),
-      totalPrice: r.total_price,
-      customerName: r.customer_name,
-      orderMode: r.order_mode,
-      deliveryAddress: r.delivery_address,
-      tracking_id: r.tracking_id || '',
-      phone: r.phone || '',
-    };
+    return mapRow(rs.rows[0]);
   }
   const orders = readLocalOrders();
   return orders.find(o => o.id === id) || null;
 }
 
-async function updateOrderStatus(id, status) {
+async function updateOrderStatus(id, status, estimatedMinutes) {
   if (db) {
-    await db.execute({ sql: 'UPDATE orders SET status = ? WHERE id = ?', args: [status, id] });
+    if (estimatedMinutes !== undefined) {
+      await db.execute({ sql: 'UPDATE orders SET status = ?, estimated_minutes = ? WHERE id = ?', args: [status, estimatedMinutes, id] });
+    } else {
+      await db.execute({ sql: 'UPDATE orders SET status = ? WHERE id = ?', args: [status, id] });
+    }
   } else {
     const orders = readLocalOrders();
     const o = orders.find(o => o.id === id);
-    if (o) { o.status = status; writeLocalOrders(orders); }
+    if (o) {
+      o.status = status;
+      if (estimatedMinutes !== undefined) o.estimatedMinutes = estimatedMinutes;
+      writeLocalOrders(orders);
+    }
   }
 }
 
@@ -481,8 +485,25 @@ const server = http.createServer(async (req, res) => {
       requestedTime: order.requestedTime,
       requestedDate: order.requestedDate,
       notes: order.notes,
+      estimatedMinutes: order.estimatedMinutes ?? null,
       messages,
     });
+  }
+
+  // --- Public API: Queue position ---
+  const trackQueueMatch = pathname.match(/^\/api\/track\/([A-Z0-9-]+)\/queue$/);
+  if (trackQueueMatch && req.method === 'GET') {
+    const trackingId = trackQueueMatch[1];
+    const order = await findOrderByTrackingId(trackingId);
+    if (!order) return json(res, { error: 'Ordine non trovato' }, 404);
+    const orderDate = (order.timestamp || '').slice(0, 10);
+    const allToday = await getOrders();
+    const position = allToday.filter(o =>
+      (o.timestamp || '').slice(0, 10) === orderDate &&
+      (o.status === 'pending' || o.status === 'approved') &&
+      new Date(o.timestamp) < new Date(order.timestamp)
+    ).length;
+    return json(res, { position });
   }
 
   const trackMsgMatch = pathname.match(/^\/api\/track\/([A-Z0-9-]+)\/messages$/);
@@ -590,7 +611,9 @@ const server = http.createServer(async (req, res) => {
     if (!checkAuth(req)) return json(res, { error: 'Non autorizzato' }, 401);
     const id = pathname.split('/').pop();
     const body = await parseBody(req);
-    await updateOrderStatus(id, body.status);
+    const validStatuses = ['pending', 'approved', 'rejected', 'completed'];
+    if (body.status && !validStatuses.includes(body.status)) return json(res, { error: 'Stato non valido' }, 400);
+    await updateOrderStatus(id, body.status, body.estimatedMinutes !== undefined ? (body.estimatedMinutes === null ? null : parseInt(body.estimatedMinutes)) : undefined);
     return json(res, { ok: true });
   }
 
