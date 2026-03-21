@@ -43,7 +43,11 @@
     .tracking-code{font-family:var(--display);font-size:1.1rem;color:var(--green-deep);letter-spacing:2px}
     .status-badge{font-size:.8rem;font-weight:700;padding:.3rem .8rem;text-transform:uppercase;letter-spacing:.5px;border:2px solid}
     .status-badge.pending{color:var(--gold);border-color:var(--gold);background:#fef9e7}
-    .status-badge.completed{color:var(--green-mid);border-color:var(--green-mid);background:var(--green-xlight)}
+    .status-badge.approved{color:var(--green-mid);border-color:var(--green-mid);background:var(--green-xlight)}
+    .status-badge.rejected{color:var(--red);border-color:var(--red);background:#fde8e8}
+    .status-badge.completed{color:var(--muted);border-color:var(--muted);background:var(--slate)}
+    .est-time-info{background:var(--green-xlight);border:2px solid var(--green-mid);padding:.6rem 1rem;margin-bottom:.75rem;font-size:.88rem;font-weight:600;color:var(--green-deep);text-align:center}
+    .queue-info{background:var(--warm);border:2px solid var(--gold);padding:.5rem 1rem;margin-bottom:.75rem;font-size:.85rem;color:var(--text);text-align:center}
 
     .order-meta{font-size:.82rem;color:var(--muted);margin-bottom:.75rem;line-height:1.6}
     .order-meta strong{color:var(--text)}
@@ -124,6 +128,8 @@
         <span id="viewCode" class="tracking-code"></span>
         <span id="viewStatus" class="status-badge"></span>
       </div>
+      <div id="viewEstTime" class="est-time-info" style="display:none"></div>
+      <div id="viewQueue" class="queue-info" style="display:none"></div>
       <div id="viewMeta" class="order-meta"></div>
       <div id="viewItems" class="order-items"></div>
       <div id="viewNotes" class="order-notes" style="display:none"></div>
@@ -226,9 +232,9 @@ function renderOrder(data) {
   document.getElementById('viewCode').textContent = data.tracking_id;
 
   const statusEl = document.getElementById('viewStatus');
-  const isPending = data.status !== 'completed';
-  statusEl.textContent = isPending ? 'In preparazione' : 'Pronto';
-  statusEl.className = 'status-badge ' + (isPending ? 'pending' : 'completed');
+  const statusMap = { pending: 'In attesa', approved: 'Approvato \u2713', rejected: 'Rifiutato \u2717', completed: 'Completato' };
+  statusEl.textContent = statusMap[data.status] || data.status;
+  statusEl.className = 'status-badge ' + (data.status || 'pending');
 
   const mode = (data.orderMode || 'pickup').toLowerCase();
   const modeLabel = mode === 'delivery' ? 'Consegna' : 'Asporto';
@@ -259,7 +265,44 @@ function renderOrder(data) {
 
   document.getElementById('viewTotal').innerHTML = '\u20AC ' + fmt(data.totalPrice || 0);
 
+  // Estimated time
+  var estEl = document.getElementById('viewEstTime');
+  if (data.status === 'approved' && data.estimatedMinutes) {
+    estEl.textContent = 'Pronto tra circa ' + data.estimatedMinutes + ' minuti';
+    estEl.style.display = 'block';
+  } else {
+    estEl.style.display = 'none';
+  }
+
+  // Queue position
+  fetchQueuePosition(data.tracking_id, data.status);
+
   renderMessages(data.messages || []);
+}
+
+async function fetchQueuePosition(trackingId, status) {
+  var queueEl = document.getElementById('viewQueue');
+  if (status !== 'pending' && status !== 'approved') {
+    queueEl.style.display = 'none';
+    return;
+  }
+  try {
+    var r = await fetch('/api/track/' + encodeURIComponent(trackingId) + '/queue');
+    if (r.ok) {
+      var data = await r.json();
+      if (data.position > 0) {
+        queueEl.textContent = 'Ci sono ' + data.position + ' ordini prima del tuo';
+        queueEl.style.display = 'block';
+      } else {
+        queueEl.textContent = 'Il tuo ordine è il prossimo!';
+        queueEl.style.display = 'block';
+      }
+    } else {
+      queueEl.style.display = 'none';
+    }
+  } catch(e) {
+    queueEl.style.display = 'none';
+  }
 }
 
 function renderMessages(msgs) {
