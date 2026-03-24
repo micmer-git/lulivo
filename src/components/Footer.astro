@@ -16,5 +16,26 @@ const year = new Date().getFullYear();
     <div class="footer-copy">
       &copy; {year} {SITE.name}
     </div>
+    <div class="footer-dev">
+      developed by <a href="mailto:micmer.dev@gmail.com">micmer</a>
+    </div>
   </div>
 </footer>
+
+<style>
+  .footer-dev {
+    text-align: center;
+    padding-top: 1rem;
+    font-size: 0.7rem;
+    letter-spacing: 0.5px;
+    color: rgba(255,255,255,0.18);
+  }
+  .footer-dev a {
+    color: rgba(255,255,255,0.25);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+  .footer-dev a:hover {
+    color: rgba(255,255,255,0.5);
+  }
+</style>

@@ -10,6 +10,9 @@ const {
   currentPath = '',
   bodyClass = '',
 } = Astro.props;
+
+const siteUrl = 'https://lulivo.pages.dev';
+const canonicalUrl = `${siteUrl}${currentPath || '/'}`;
 ---
 <!DOCTYPE html>
 <html lang="it">
@@ -19,6 +22,54 @@ const {
   <title>{title}</title>
   <meta name="description" content={description} />
   <link rel="icon" href={`${import.meta.env.BASE_URL}favicon.svg`} />
+  <link rel="canonical" href={canonicalUrl} />
+  <meta name="theme-color" content="#2d5016" />
+  <meta name="robots" content="index, follow" />
+  <meta name="google-site-verification" content="IFUh-UdRr6ksj6aAf_Nn9UpStzBzq38VaZEAOWkyBI8" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content={title} />
+  <meta property="og:description" content={description} />
+  <meta property="og:url" content={canonicalUrl} />
+  <meta property="og:site_name" content={SITE.name} />
+  <meta property="og:locale" content="it_IT" />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content={title} />
+  <meta name="twitter:description" content={description} />
+
+  <!-- Schema.org Structured Data -->
+  <script type="application/ld+json" set:html={JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "Restaurant",
+    "name": SITE.name,
+    "description": `${SITE.tagline}. Pizza artigianale, calzoni, panuozzi e fritti.`,
+    "url": siteUrl,
+    "telephone": SITE.phone,
+    "address": {
+      "@type": "PostalAddress",
+      "streetAddress": "Via Aldo Moro, 4/A",
+      "addressLocality": "Mozzo",
+      "addressRegion": "BG",
+      "postalCode": "24030",
+      "addressCountry": "IT"
+    },
+    "geo": {
+      "@type": "GeoCoordinates",
+      "latitude": 45.7095,
+      "longitude": 9.6070
+    },
+    "servesCuisine": ["Pizza", "Italian"],
+    "priceRange": "€",
+    "openingHoursSpecification": [
+      { "@type": "OpeningHoursSpecification", "dayOfWeek": ["Monday","Wednesday","Thursday","Friday","Saturday","Sunday"], "opens": "18:30", "closes": "21:30" }
+    ],
+    "hasMenu": `${siteUrl}/menu/`,
+    "acceptsReservations": false,
+    "paymentAccepted": "Cash, Credit Card",
+  })} />
 </head>
 <body class={bodyClass}>
   <Header currentPath={currentPath} />
